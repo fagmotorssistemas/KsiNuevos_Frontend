@@ -108,17 +108,22 @@ dejar de moverse; tú decides el ritmo):
   tomas donde el auto (pintura, faros, parrilla, rines) llena el cuadro, en el segundo exacto en que se ve mejor.
 
 FORMATO CAMIONETA (si "Tipo" es camioneta, este formato manda sobre las reglas generales de ritmo y orden). Tiene su
-propio diseño offroad completo, robusto: títulos naranjas rústicos con relieve 3D (modelo, cilindrada, "COMENTA"),
-etiquetas tipo escáner "K-SI SCAN" con esquinas o una mira que gira sobre lo que se señala,
-fichas con cinta de peligro, personitas para los ocupantes, caja de comentario que se escribe sola y firma final con
-huella de llanta. MARCA TODO LO QUE SE DICE Y SE VE: cada vez que el asesor nombra o muestra algo (volante, pantalla,
-palanca, cámara, tablero, balde, cabina), va su feature_callout con el "focus_box" exacto.
+propio diseño offroad completo, robusto y todo en 3D real: títulos de metal naranja oxidado que se arman letra por
+letra (la palabra del gancho cae, el modelo se levanta al paso de una LLANTA 3D que cruza rodando, las cifras caen y
+cuentan, "COMENTA"), un escáner holográfico 3D que gira sobre los objetos chicos (botón, palanca) y esquinas con línea
+de escaneo sobre los grandes (pantalla, tablero), etiquetas "K-SI SCAN" que caen girando, fichas con cinta de peligro,
+personitas para los ocupantes, caja de comentario que se escribe sola y placa final con llanta 3D. Los datos de
+tracción, aros o llantas (4x4, "aros de 18") traen una llanta 3D que entra rodando junto a la cifra. MARCA TODO LO QUE
+SE DICE Y SE VE: cada vez que el asesor nombra o muestra algo (volante, pantalla, palanca, cámara, tablero, balde,
+cabina), va su feature_callout con el "focus_box" exacto.
 Arco fijo en este orden; un dato por plano, un corte cada 1.5–3 s, ningún plano quieto más de 4 s:
 1. GANCHO (0–5 s): teaser con llantas, polvo o contrapicado; luego la toma con más movimiento o textura.
    hook_text con la pregunta al nicho y un adjetivo marcado ("¿Buscas una pickup *potente*?") y en "subtext" UNA palabra
-   que cae en grande ("IMPONENTE", "OFF-ROAD", "RUDA"). "hookStyle": "golpe". En camionetas las transiciones son
-   casi siempre "corte" (algún "zoom" para el motor o la presentación) y la energía 3 se reserva para gancho,
-   presentación y motor.
+   que cae en grande en metal 3D ("IMPONENTE", "OFF-ROAD", "RUDA"): siempre ponla. "hookStyle": "golpe". En
+   camionetas las transiciones son casi siempre "corte" (algún "zoom" para el motor o la presentación), y 1–2 veces
+   por Reel "barrido": en camionetas es una LLANTA 3D GIGANTE que pasa rodando frente a la cámara y descubre la toma
+   siguiente. Úsalo en los cambios de bloque grandes (de la presentación al motor, del exterior al interior, antes del
+   cierre), en una toma que dure al menos 2 s. La energía 3 se reserva para gancho, presentación y motor.
 2. PRESENTACIÓN: title_3d con "text" = MODELO, "subtext" = MARCA, "badge" = versión o año ("XL", "2024").
 3. MOTOR: con el capó abierto, spec_counter con la cilindrada ("value" 2.0, "unit" = combustible en palabra:
    "DIÉSEL") y, si el asesor dice el beneficio, spec_chips con esa frase corta ("TRABAJO EXIGENTE").
@@ -130,7 +135,8 @@ Arco fijo en este orden; un dato por plano, un corte cada 1.5–3 s, ningún pla
    garantía, kilometraje, único dueño). Sin gráfico: que lo digan los subtítulos.
 7. CTA: el asesor a cámara pidiendo comentar. cta_end con "text" = palabra clave en mayúsculas; si el asesor dice una
    campaña, "MODELO + PALABRA" ("RANGER + MUNDIAL"). La firma final (K-Si Nuevos, Cuenca) la agrega el sistema.
-Los números son los héroes (cilindrada, velocidades, ocupantes, kg de carga, 4x4): siempre con spec_counter. En
+Los números son los héroes (cilindrada, velocidades, ocupantes, kg de carga, 4x4): siempre con spec_counter. La
+tracción va como "value" 4, "unit" "X4", "text" "Tracción" (se dibuja "4X4" con la llanta 3D al lado). En
 camionetas no uses sticker (la interacción es la caja de comentario del cierre) ni price_tag (salvo que el asesor diga el
 precio). Si un bloque no tiene tomas, sáltalo y no
 inventes datos. "captionStyle" no se usa en camionetas (tienen su diseño): pon "robusto".

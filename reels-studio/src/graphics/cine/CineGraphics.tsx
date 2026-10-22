@@ -12,7 +12,9 @@ import { formatSpecNumber, FONT_UI } from '../../theme'
 import { clamp, splitEmphasis, useEnterExit } from '../anim'
 import { Icon } from '../Icons'
 import { TreadBackground } from '../offroad/kit'
-import { Chrome3D, enter3d, Particles } from './Cine3D'
+import { Letters3D, measureLetters, staggered } from '../../three/Letters3D'
+import { Stage3D, toScene, UNITS_PER_PX } from '../../three/Stage3D'
+import { Chrome3D, Particles } from './Cine3D'
 import { AccentLine, CineCorners, CineLabel, CineText, ease, focusIn, LETTERBOX, useCineType } from './kit'
 
 type Props = { g: TimelineGraphic; theme: ReelTheme }
@@ -160,7 +162,7 @@ export const CineTitle: React.FC<Props> = ({ g, theme }) => {
           <CineLabel text={g.subtext} size={38} spacing={0.55} />
         </div>
       ) : null}
-      <Chrome3D text={g.text} font={type.font3d} theme={theme} y={titleY} enter={enter3d(frame, 0, 24)} exit={exit} />
+      <Chrome3D text={g.text} font={type.font3d} theme={theme} y={titleY} delay={0} exit={exit} />
       {g.badge ? (
         <div style={{ position: 'absolute', top: titleY + 140, left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22, opacity: ease(frame, 16, 12) }}>
           <AccentLine t={ease(frame, 16, 14)} width={90} color={accent} align="right" />
@@ -256,8 +258,9 @@ export const CineCounter: React.FC<Props> = ({ g, theme }) => {
   return <CineNumber g={g} theme={theme} />
 }
 
+/** Cifra héroe: el número en cromo 3D (llega dígito por dígito desde el fondo mientras cuenta), con su etiqueta y unidad. */
 const CineNumber: React.FC<Props> = ({ g, theme }) => {
-  const { frame, fps, height, exit } = useEnterExit(12)
+  const { frame, fps, durationInFrames, width, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
   const type = useCineType(theme)
   const value = g.value ?? 0
@@ -267,42 +270,62 @@ const CineNumber: React.FC<Props> = ({ g, theme }) => {
   const shortUnit = g.unit && g.unit.length <= 3 ? g.unit : ''
   const wordUnit = g.unit && g.unit.length > 3 ? g.unit : ''
   const number = `${g.prefix ?? ''}${formatSpecNumber(count, decimals)}`
+  const finalNumber = `${g.prefix ?? ''}${formatSpecNumber(value, decimals)}`
   // Si la etiqueta y la unidad dicen lo mismo ("Ocupantes" / "OCUPANTES"), se muestra una sola vez (abajo).
   const sameWord = wordUnit && wordUnit.toLowerCase() === g.text.trim().toLowerCase()
-  const finalLength = `${g.prefix ?? ''}${formatSpecNumber(value, decimals)}${shortUnit}`.length
-  const size = Math.round((finalLength <= 4 ? 250 : finalLength <= 7 ? 190 : 140) * type.displayScale)
+  const finalLength = `${finalNumber}${shortUnit}`.length
   const low = g.placement === 'abajo'
+  const finish = theme === 'offroad' ? 'rust' : 'chrome'
+
+  // Tamaño por alto de mayúscula; si la cifra final con su unidad no entra a lo ancho, se achica todo junto.
+  const capPerSize = measureLetters('H', type.font3d, 1).cap
+  const targetCapU = (finalLength <= 4 ? 190 : finalLength <= 7 ? 150 : 110) * UNITS_PER_PX
+  const gapU = 20 * UNITS_PER_PX
+  const rawSize = targetCapU / capPerSize
+  const rawWidth = measureLetters(finalNumber, type.font3d, rawSize).width + (shortUnit ? gapU + measureLetters(shortUnit, type.font3d, rawSize * 0.42).width : 0)
+  const numberSize = rawSize * Math.min(1, ((width - 170) * UNITS_PER_PX) / rawWidth)
+  const unitSize = numberSize * 0.42
+  const numberWidthU = measureLetters(finalNumber, type.font3d, numberSize).width
+  const capU = capPerSize * numberSize
+  const capPxN = capU / UNITS_PER_PX
+
+  const labelH = sameWord ? 0 : 62
+  const blockH = labelH + capPxN + 34 + 44
+  const blockTop = low ? safeBottom(height) - 110 - blockH : safeTop(height) + 20
+  const baselineY = blockTop + labelH + capPxN
+  const [leftU, baselineU] = toScene(80, baselineY, width, height)
+  // Profundidad: la cifra entra girada en perspectiva y sigue moviéndose apenas.
+  const turn = -0.45 * (1 - ease(frame, 2, 22)) - 0.12 + Math.sin(frame / 40) * 0.05
+  const sweep = interpolate(frame, [0, durationInFrames], [-6, 6])
 
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
       <AbsoluteFill style={{ background: `linear-gradient(${low ? 0 : 180}deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 45%)` }} />
-      <div
-        style={{
-          position: 'absolute',
-          left: 80,
-          right: 80,
-          ...(low ? { bottom: height - safeBottom(height) + 110 } : { top: safeTop(height) + 20 }),
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 14,
-        }}
-      >
-        {sameWord ? null : (
-          <div style={focusIn(ease(frame, 0, 12), { blur: 6, scale: 1 })}>
-            <CineLabel text={g.text} />
-          </div>
-        )}
-        {/* Profundidad: la cifra entra girada en perspectiva y sigue moviéndose apenas. */}
-        <div style={{ transformOrigin: 'left center', transform: `perspective(1100px) rotateY(${(-26 * (1 - ease(frame, 2, 20)) - 7 + Math.sin(frame / 40) * 3).toFixed(2)}deg)` }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 18, transformOrigin: 'left center', ...focusIn(ease(frame, 2, 16), { scale: 1.04 }) }}>
-            <CineText text={number} size={size} family={type.display} worn={theme === 'offroad'} />
-            {shortUnit ? <CineText text={shortUnit} size={Math.round(size * 0.42)} family={type.display} color={accent} /> : null}
-          </div>
+      {sameWord ? null : (
+        <div style={{ position: 'absolute', top: blockTop, left: 80, ...focusIn(ease(frame, 0, 12), { blur: 6, scale: 1 }) }}>
+          <CineLabel text={g.text} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 22, opacity: ease(frame, 12, 12) }}>
-          <AccentLine t={ease(frame, 12, 14)} width={110} color={accent} />
-          {wordUnit || g.subtext ? <CineLabel text={wordUnit || g.subtext || ''} size={36} color={wordUnit ? accent : undefined} spacing={0.3} /> : null}
-        </div>
+      )}
+      <Stage3D sweep={[sweep, baselineU + capU / 2 + 1.2]}>
+        <group position={[leftU, baselineU, 0]} rotation={[0.04, turn, 0]}>
+          <Letters3D text={number} font={type.font3d} finish={finish} entrance="depth" progress={() => (frame - 2) / 16} size={numberSize} align="left" position={[0, capU / 2, 0]} />
+          {shortUnit ? (
+            <Letters3D
+              text={shortUnit}
+              font={type.font3d}
+              finish={finish}
+              entrance="depth"
+              progress={staggered(frame, 10, 2, 16)}
+              size={unitSize}
+              align="left"
+              position={[numberWidthU + gapU, (capPerSize * unitSize) / 2, 0]}
+            />
+          ) : null}
+        </group>
+      </Stage3D>
+      <div style={{ position: 'absolute', top: baselineY + 34, left: 80, right: 80, display: 'flex', alignItems: 'center', gap: 22, opacity: ease(frame, 12, 12) }}>
+        <AccentLine t={ease(frame, 12, 14)} width={110} color={accent} />
+        {wordUnit || g.subtext ? <CineLabel text={wordUnit || g.subtext || ''} size={36} color={wordUnit ? accent : undefined} spacing={0.3} /> : null}
       </div>
     </AbsoluteFill>
   )
@@ -459,7 +482,7 @@ export const CineCta: React.FC<Props & { brand: Brand }> = ({ g, theme, brand })
       <div style={{ position: 'absolute', top: y0 - 210, left: 0, right: 0, display: 'flex', justifyContent: 'center', ...focusIn(ease(frame, 4, 14), { blur: 6, scale: 1 }) }}>
         <CineLabel text="Comenta" size={40} spacing={0.6} />
       </div>
-      <Chrome3D text={keyword} font={type.font3d} theme={theme} y={y0} enter={enter3d(frame, 6, 26)} exit={0} size={1.35} />
+      <Chrome3D text={keyword} font={type.font3d} theme={theme} y={y0} delay={6} exit={0} size={1.35} />
       <div style={{ position: 'absolute', top: y0 + 150, left: 60, right: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30, textAlign: 'center' }}>
         <AccentLine t={ease(frame, 16, 14)} width={200} color={accent} align="center" />
         {g.subtext ? (

@@ -15,7 +15,7 @@ import montserratData from './montserrat-black.typeface.json'
 import russoData from './russo.typeface.json'
 import tekoData from './teko.typeface.json'
 
-const FONTS = {
+export const FONTS = {
   anton: new Font(antonData as unknown as FontData),
   montserrat: new Font(montserratData as unknown as FontData),
   bebas: new Font(bebasData as unknown as FontData),

@@ -1,74 +1,21 @@
 /**
- * Piezas del diseño "camioneta" (tema offroad), calcado del formato de referencia de la Ranger:
- * títulos naranjas rústicos con volumen, etiquetas tipo escáner, esquinas naranjas y huella
- * de llanta. Todo en CSS/SVG (sin WebGL) para que renderice igual en cualquier máquina.
+ * Piezas 2D del diseño "camioneta" (tema offroad), calcado del formato de referencia de la Ranger: etiquetas tipo
+ * escáner, franja de peligro, esquinas naranjas y huella de llanta. Los títulos de metal, la llanta y el escáner
+ * holográfico son 3D (src/three).
  */
 import React from 'react'
 import { interpolate } from 'remotion'
-import { extrudedShadow, FONT_DISPLAY, FONT_SPEED, FONT_UI, PALETTES } from '../../theme'
+import { FONT_DISPLAY, FONT_SPEED, FONT_UI, PALETTES } from '../../theme'
 
 export const OFFROAD = {
   ...PALETTES.offroad,
-  rust: '#5A2508',
-  shadow: '#2E1405',
   panel: 'rgba(16, 13, 10, 0.84)',
-  mud: '#4A2E17',
-  mudLight: '#7A5230',
-  mudDark: '#2B1A0C',
 }
-export const FONT_RUSTY = FONT_SPEED
 export const FONT_CAPTION = FONT_DISPLAY
 export const FONT_TAG = FONT_SPEED
 export const FONT_LABEL = FONT_UI
 
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const
-
-/** Manchas y rayones de óxido (ruido SVG): solo deja ver los puntos más fuertes. */
-const GRUNGE = `url("data:image/svg+xml;utf8,${encodeURIComponent(
-  "<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'>" +
-    "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/>" +
-    "<feColorMatrix values='0 0 0 0 0.22  0 0 0 0 0.09  0 0 0 0 0.02  0 0 0 2.4 -1.3'/></filter>" +
-    "<filter id='r'><feTurbulence type='fractalNoise' baseFrequency='0.015 0.5' numOctaves='2' seed='3'/>" +
-    "<feColorMatrix values='0 0 0 0 1  0 0 0 0 0.85  0 0 0 0 0.6  0 0 0 2 -1.45'/></filter>" +
-    "<rect width='100%' height='100%' filter='url(#n)'/><rect width='100%' height='100%' filter='url(#r)'/></svg>"
-)}")`
-const RUST_GRADIENT = 'linear-gradient(180deg, #FFD592 0%, #FFA23A 34%, #F06F12 66%, #A9420A 100%)'
-
-/** Título naranja rústico con volumen: capa de extrusión café debajo y cara con degradado y desgaste. */
-export const RustyText: React.FC<{ text: string; size: number; style?: React.CSSProperties }> = ({ text, size, style }) => {
-  const common: React.CSSProperties = {
-    fontFamily: FONT_RUSTY,
-    fontSize: size,
-    lineHeight: 1,
-    letterSpacing: size * 0.015,
-    textTransform: 'uppercase',
-    whiteSpace: 'nowrap',
-  }
-  return (
-    <span style={{ position: 'relative', display: 'inline-block', ...style }}>
-      <span style={{ ...common, color: OFFROAD.shadow, textShadow: extrudedShadow(Math.round(size / 13), OFFROAD.shadow, 125) }}>
-        {text}
-      </span>
-      <span
-        aria-hidden
-        style={{
-          ...common,
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          color: 'transparent',
-          backgroundImage: `${GRUNGE}, ${RUST_GRADIENT}`,
-          backgroundSize: '220px 220px, 100% 100%',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          WebkitTextStroke: `${Math.max(2, size / 40)}px ${OFFROAD.rust}`,
-        }}
-      >
-        {text}
-      </span>
-    </span>
-  )
-}
 
 /** Esquinas en L fuera de una caja (look de escáner). */
 const Corners: React.FC<{ size: number; inset: number; color: string; stroke: number }> = ({ size, inset, color, stroke }) => (
@@ -93,7 +40,7 @@ const Corners: React.FC<{ size: number; inset: number; color: string; stroke: nu
 )
 
 /** Franja de peligro naranja y negra (cinta de obra), como debajo de "TRABAJO EXIGENTE" en la referencia. */
-const Hazard: React.FC<{ progress: number; height: number }> = ({ progress, height }) => (
+export const Hazard: React.FC<{ progress: number; height: number }> = ({ progress, height }) => (
   <div
     style={{
       marginTop: 10,
@@ -162,32 +109,6 @@ export const Tag: React.FC<{ text: string; label?: string; progress: number; siz
       </div>
       {hazard ? <Hazard progress={interpolate(progress, [0.3, 1], [0, 1], clamp)} height={Math.round(size * 0.32)} /> : null}
     </div>
-  )
-}
-
-/**
- * Mira sobre un objeto chico (un botón del volante, la palanca): anillo fino con un arco naranja que gira, como
- * el escáner de la referencia. Para objetos grandes (la pantalla) se usan las esquinas (CornerFrame).
- */
-export const TargetRing: React.FC<{ x: number; y: number; r: number; progress: number; frame: number }> = ({ x, y, r, progress, frame }) => {
-  const rr = r * interpolate(progress, [0, 1], [1.35, 1], clamp)
-  const arcLen = Math.PI * 2 * rr * 0.32
-  return (
-    <svg style={{ position: 'absolute', inset: 0, overflow: 'visible', opacity: interpolate(progress, [0, 0.4], [0, 1], clamp) }} width="100%" height="100%">
-      <circle cx={x} cy={y} r={rr} fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth={4} />
-      <circle
-        cx={x}
-        cy={y}
-        r={rr + 12}
-        fill="none"
-        stroke={OFFROAD.accent}
-        strokeWidth={9}
-        strokeLinecap="round"
-        strokeDasharray={`${arcLen} ${Math.PI * 2 * (rr + 12)}`}
-        transform={`rotate(${(frame * 6) % 360} ${x} ${y})`}
-      />
-      <circle cx={x} cy={y} r={7} fill={OFFROAD.accent} />
-    </svg>
   )
 }
 

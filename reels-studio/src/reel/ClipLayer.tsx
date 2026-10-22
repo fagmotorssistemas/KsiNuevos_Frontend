@@ -2,6 +2,7 @@ import { Video } from '@remotion/media'
 import React from 'react'
 import { AbsoluteFill, Easing, interpolate, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from 'remotion'
 import type { Energy, ReelProps, TimelineCut } from '../plan/types'
+import { TIRE_WIPE_FRAMES, tireWipeX } from '../three/Tire3D'
 import { usePalette } from './palette'
 import { zoomProgress, zoomTransform } from './zoom'
 
@@ -10,8 +11,9 @@ export const resolveSrc = (src: string) => (/^https?:\/\//.test(src) ? src : sta
 /** Encuadre más cerrado en los saltos impares: disimula el corte seco al quitar un silencio. */
 const JUMP_SCALE = 1.1
 /**
- * Camionetas: cámara sobria, como la referencia. Cortes secos (sin zoom, barrido ni destello), sin
- * golpes en las palabras y un acercamiento lento y continuo en cada toma para que nada quede quieto.
+ * Camionetas: cámara sobria, como la referencia. Cortes secos (sin destello), sin golpes en las palabras y un
+ * acercamiento lento y continuo en cada toma para que nada quede quieto. Su "barrido" es una llanta 3D gigante que
+ * cruza frente a la cámara y descubre la toma nueva (TireWipe en Reel.tsx).
  */
 const OFFROAD_DRIFT = 1.08
 const OFFROAD_JUMP_SCALE = 1.06
@@ -31,7 +33,7 @@ const CINE_DRIFT: Record<Energy, number> = { 1: 1.04, 2: 1.07, 3: 1.11 }
 const TEASER_DRIFT = 1.12
 /** Transiciones que cada diseño permite (el resto entra con corte seco). */
 const CINE_TRANSITIONS = new Set(['corte', 'disolver', 'zoom', 'whip', 'flash', 'barrido'])
-const OFFROAD_TRANSITIONS = new Set(['corte', 'disolver', 'zoom', 'whip'])
+const OFFROAD_TRANSITIONS = new Set(['corte', 'disolver', 'zoom', 'whip', 'barrido'])
 /**
  * Duración de las transiciones de cine (cuadros a 30 cps): con calma, que se alcancen a ver. En el barrido y el
  * fundido la toma anterior se queda detrás mientras dura (ver Reel.tsx).
@@ -104,10 +106,18 @@ export const ClipLayer: React.FC<{
   // Fundido: la toma nueva aparece sobre la anterior.
   const dissolve = transitionIn === 'disolver' ? interpolate(frame, [0, DISOLVER_FRAMES], [0, 1], { extrapolateRight: 'clamp', easing: Easing.inOut(Easing.quad) }) : 1
   const glitch = transitionIn === 'glitch' && frame < 4
-  // Barrido de marca: la toma nueva aparece detrás de una franja diagonal del color de acento.
+  // Barrido de marca: la toma nueva aparece detrás de una franja diagonal del color de acento. En camionetas, detrás
+  // de la llanta gigante que cruza (el borde va justo en el centro de la llanta, que lo tapa).
+  const tireWipe = offroad && transitionIn === 'barrido'
   const wipe = transitionIn === 'barrido' ? interpolate(frame, [0, BARRIDO_FRAMES], [0, 1], { extrapolateRight: 'clamp', easing: Easing.inOut(Easing.cubic) }) : 1
   const wipeEdge = -0.25 + wipe * 1.5 // borde de la franja, en fracciones del ancho (la diagonal lo inclina)
-  const wipeClip = wipe < 1 ? `polygon(0 0, ${(wipeEdge + 0.25) * 100}% 0, ${wipeEdge * 100}% 100%, 0 100%)` : undefined
+  const tireEdge = tireWipe && frame < TIRE_WIPE_FRAMES ? Math.max(0, tireWipeX(frame, width, height)) : null
+  const wipeClip =
+    tireEdge !== null
+      ? `polygon(0 0, ${tireEdge}px 0, ${tireEdge}px 100%, 0 100%)`
+      : !tireWipe && wipe < 1
+        ? `polygon(0 0, ${(wipeEdge + 0.25) * 100}% 0, ${wipeEdge * 100}% 100%, 0 100%)`
+        : undefined
 
   return (
     <AbsoluteFill style={{ overflow: 'hidden', opacity: dissolve }}>
@@ -177,7 +187,7 @@ export const ClipLayer: React.FC<{
       {/* Cine: destello de luz cálida que cruza la pantalla (light leak), no un flash blanco plano. */}
       {transitionIn === 'flash' && cine && frame < LEAK_FRAMES ? <LightLeak frame={frame} width={width} /> : null}
     </AbsoluteFill>
-      {wipeClip ? <WipeStripe edge={wipeEdge} color={accent} /> : null}
+      {wipeClip && !tireWipe ? <WipeStripe edge={wipeEdge} color={accent} /> : null}
     </AbsoluteFill>
   )
 }

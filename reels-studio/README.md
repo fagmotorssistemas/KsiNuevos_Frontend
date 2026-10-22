@@ -19,10 +19,13 @@ clips crudos del asesor
 ```
 
 **Camionetas** (`theme: offroad`, `look: social`; lo decide `run.ts` cuando el tipo es camioneta): diseño offroad
-completo como la referencia de la Ranger: títulos naranjas rústicos con relieve 3D, barro en el gancho, etiquetas
-"K-SI SCAN" con esquinas (objetos grandes) o una mira que gira (objetos chicos) sobre lo que se dice y se ve, fichas con
-cinta de peligro, personitas para los ocupantes, caja de comentario que se escribe sola y firma con huella de llanta.
-Piezas en `src/graphics/offroad/`.
+completo como la referencia de la Ranger, todo en 3D real (three.js): títulos de metal naranja oxidado que se arman
+letra por letra (el modelo se levanta al paso de una llanta 3D que cruza rodando), cifras que caen y cuentan (con llanta
+3D al lado si son de tracción o de aros), escáner holográfico 3D sobre los objetos chicos y esquinas con línea de
+escaneo sobre los grandes, etiquetas "K-SI SCAN" que caen girando, fichas con cinta de peligro, personitas para los
+ocupantes, caja de comentario que se escribe sola y placa final con llanta 3D. Su "barrido" es una llanta 3D gigante
+que pasa frente a la cámara y descubre la toma siguiente. Piezas 2D en `src/graphics/offroad/`, 3D en `src/three/`
+(`Letters3D`, `Tire3D`, `ScanRing3D`, `Stage3D`).
 
 **Modo cine** (todos los demás, `look: cine`): franjas negras que se abren como un telón en el primer
 instante, grano de película, viñeta, color de cine, logo en blanco dentro de la franja, títulos grandes
@@ -35,7 +38,7 @@ anterior (rebotes, cajas de color) sigue disponible con `render-plan.ts --look s
 | --- | --- | --- |
 | `teaser` | 2–4 instantes muy visuales del material | Adelanto de 0.4 s cada uno antes de que hable el asesor (sin voz, con el gancho encima) |
 | `hookStyle` | `golpe`, `revelado`, `cruce` o `enfoque` | Cómo entra el texto del gancho: palabra por palabra con sacudón, desde detrás de una línea, desde los dos lados, o de borroso a nítido |
-| `cuts[].transitionIn` | `corte`, `whip`, `zoom`, `flash`, `barrido` | Seco, barrido con desenfoque, zoom de impacto, destello de luz cálida, franja de color de marca (camionetas: solo corte, zoom, whip) |
+| `cuts[].transitionIn` | `corte`, `whip`, `zoom`, `flash`, `barrido` | Seco, barrido con desenfoque, zoom de impacto, destello de luz cálida, franja de color de marca (camionetas: el barrido es una llanta 3D gigante; sin destello) |
 | `cuts[].energy` | 1 calmado · 2 normal · 3 impacto | Velocidad del acercamiento continuo y golpes de cámara en las palabras clave |
 | `brillo` (gráfico) | Tomas donde el auto llena el cuadro | Reflejo de luz que cruza la carrocería, con un destello |
 | `spec_counter.variant` | `medidor` o `numero` | Medidor con aguja (potencia, torque, velocidad, cilindrada) o número que cuenta |
@@ -48,7 +51,7 @@ consistente, se ve con la marca de K-Si y se puede corregir a mano (el plan es u
 | Tipo | Cuándo | Qué hace |
 |---|---|---|
 | `hook_text` | primeros 0–2 s | Palabras que golpean una a una; las `*marcadas*` en bloque rojo |
-| `title_3d` | al presentar el carro | Modelo en texto 3D metálico (three.js), marca arriba, año en bloque rojo 3D |
+| `title_3d` | al presentar el carro | Modelo en letras 3D (three.js) que se arman una por una: cromo en cine, metal oxidado con llanta 3D en camionetas |
 | `feature_callout` | se ve una característica | Zoom al objeto (lo sigue si la cámara se mueve) + mira + tarjeta 3D con ícono |
 | `spec_counter` | un dato numérico | Número que cuenta hacia arriba ("128.000 KM"), o medidor con aguja (`variant: medidor`) |
 | `spec_chips` | datos rápidos | Fichas que entran en cascada ("2.8 DIÉSEL · AUTOMÁTICO · 4x4") |
@@ -72,9 +75,9 @@ la web lo saca de `type_body` del inventario) y elige uno de 6 **estilos de subt
 | `palabra` | Teko gigante | Una palabra a la vez, con rebote | Mucha energía |
 
 **Camionetas** (`categoria: camioneta`) usan su propio diseño (`theme: offroad`, calcado de un Reel
-de referencia de la Ranger): títulos naranjas rústicos con volumen y desgaste, etiquetas tipo escáner
-con esquinas, barro en el gancho, números héroe (con personitas si son ocupantes), caja de comentario
-que se escribe sola y firma final con huella de llanta; color cálido, viñeta y reencuadre cada ~2 s.
+de referencia de la Ranger): títulos de metal oxidado en 3D que se arman letra por letra, llanta 3D,
+escáner holográfico 3D, números héroe (con personitas si son ocupantes), caja de comentario que se
+escribe sola y placa final con llanta 3D; color cálido, viñeta y reencuadre cada ~2 s.
 Claude sigue un arco fijo de 7 bloques (gancho → nombre → motor → interior → espacio/carga → marca →
 CTA). Piezas en `src/graphics/offroad/`; para probarlo con un plan: `render-plan.ts --theme offroad`.
 

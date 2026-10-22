@@ -17,6 +17,7 @@ import type { HookStyle } from '../plan/schema'
 import type { Brand, ReelLook, ReelProps, ReelTheme, TimelineGraphic } from '../plan/types'
 import { FONT_UI, PALETTES } from '../theme'
 import { Captions } from './Captions'
+import { TIRE_WIPE_FRAMES, TireWipe } from '../three/Tire3D'
 import { BARRIDO_FRAMES, ClipLayer, DISOLVER_FRAMES, resolveSrc } from './ClipLayer'
 import { PaletteProvider } from './palette'
 
@@ -156,8 +157,10 @@ export const Reel: React.FC<ReelProps> = (props) => {
         const underFrames =
           !prev || cut.jump > 0
             ? 0
-            : cut.transitionIn === 'barrido' && theme !== 'offroad'
-              ? BARRIDO_FRAMES
+            : cut.transitionIn === 'barrido'
+              ? theme === 'offroad'
+                ? TIRE_WIPE_FRAMES
+                : BARRIDO_FRAMES
               : cut.transitionIn === 'disolver' && (cine || theme === 'offroad')
                 ? DISOLVER_FRAMES
                 : 0
@@ -188,6 +191,16 @@ export const Reel: React.FC<ReelProps> = (props) => {
           <InsertLayer insert={ins} first={i === 0} last={i === all.length - 1} engine={props.videoEngine} theme={theme} look={look} />
         </Sequence>
       ))}
+      {/* Camionetas: la llanta 3D gigante de cada barrido pasa por encima de las dos tomas. */}
+      {theme === 'offroad'
+        ? props.cuts.map((cut, i) =>
+            i > 0 && cut.jump === 0 && cut.transitionIn === 'barrido' ? (
+              <Sequence key={`tire-${i}`} from={cut.fromFrame} durationInFrames={TIRE_WIPE_FRAMES} name="llanta 3D">
+                <TireWipe />
+              </Sequence>
+            ) : null
+          )
+        : null}
       {props.tailFrames > 0 ? (
         <Sequence from={last.fromFrame + last.durationInFrames} durationInFrames={props.tailFrames} name="cola congelada">
           <Freeze frame={last.durationInFrames - 1}>

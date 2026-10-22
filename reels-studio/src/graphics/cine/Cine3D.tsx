@@ -1,69 +1,60 @@
 /**
- * 3D del modo cine: letras de cromo extruidas (three.js) que llegan desde el fondo, giran despacio y reflejan una luz
- * que las cruza, como el título de un comercial de autos. Más partículas de luz flotando para dar profundidad.
+ * 3D del modo cine: letras de cromo extruidas (three.js) que llegan una por una desde el fondo, se asientan y siguen
+ * girando apenas mientras una luz las cruza, como el título de un comercial de autos. Más partículas de luz flotando
+ * para dar profundidad.
  */
-import { ThreeCanvas } from '@remotion/three'
 import React from 'react'
 import { AbsoluteFill, Easing, interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion'
 import type { ReelTheme } from '../../plan/types'
-import { usePalette } from '../../reel/palette'
-import { StudioEnvironment, Text3D, type FontKey } from '../../three/Text3D'
+import { Letters3D, staggered } from '../../three/Letters3D'
+import { Stage3D, UNITS_PER_PX } from '../../three/Stage3D'
+import type { FontKey } from '../../three/Text3D'
 import { clamp } from '../anim'
 
-/** Unidades de escena por píxel con la cámara de abajo (fov 35 a 14 de distancia, lienzo de 1920 de alto). */
-const UNITS_PER_PX = (2 * Math.tan((17.5 * Math.PI) / 180) * 14) / 1920
+export { UNITS_PER_PX }
 
 /**
- * Texto de cromo en 3D. `y` es la altura en píxeles del centro del texto; `enter` y `exit` van de 0 a 1.
- * Entra desde atrás y de lado, se asienta y sigue girando apenas mientras una luz lo recorre.
+ * Texto de cromo en 3D. `y` es la altura en píxeles del centro del texto; las letras empiezan a llegar en el cuadro
+ * `delay`, una cada 3 cuadros; `exit` va de 0 a 1.
  */
 export const Chrome3D: React.FC<{
   text: string
   font: FontKey
   theme: ReelTheme
   y: number
-  enter: number
+  delay: number
   exit: number
   size?: number
   maxWidthPx?: number
-}> = ({ text, font, theme, y, enter, exit, size = 1.25, maxWidthPx = 940 }) => {
+}> = ({ text, font, theme, y, delay, exit, size = 1.25, maxWidthPx = 940 }) => {
   const frame = useCurrentFrame()
-  const { fps, durationInFrames, width, height } = useVideoConfig()
-  const { accent } = usePalette()
+  const { fps, durationInFrames, height } = useVideoConfig()
   const t = frame / fps
-  const offroad = theme === 'offroad'
+  const enter = enter3d(frame, delay, 30)
   // Luz que cruza las letras de izquierda a derecha durante el gráfico (reflejo que corre por el cromo).
   const sweep = interpolate(frame, [0, durationInFrames], [-7, 7])
   const sceneY = (height / 2 - y) * UNITS_PER_PX
-  const turn = (1 - enter) * -0.75 + 0.1 - t * 0.035
+  const turn = (1 - enter) * -0.35 + 0.1 - t * 0.035
+  const letter = staggered(frame, delay, 3, 20)
 
   return (
-    <ThreeCanvas width={width} height={height} camera={{ fov: 35, position: [0, 0, 14] }} gl={{ antialias: true }}>
-      <StudioEnvironment />
-      <ambientLight intensity={0.85} />
-      <directionalLight position={[2, 4, 8]} intensity={2.4} />
-      <directionalLight position={[-3, -1, 6]} intensity={0.8} />
-      <pointLight position={[sweep, sceneY + 1.2, 3]} intensity={160} distance={12} color="#ffffff" />
-      {/* Luz de acento desde abajo: tiñe los cantos con el color de la marca. */}
-      <pointLight position={[0, sceneY - 2.4, 2.2]} intensity={40} distance={8} color={accent} />
+    <Stage3D sweep={[sweep, sceneY + 1.2]}>
       <group
-        position={[0, sceneY, (1 - enter) * -5]}
+        position={[0, sceneY, 0]}
         rotation={[0.05 + Math.sin(t * 0.9) * 0.025 + exit * 0.4, turn, 0]}
-        scale={Math.max(0.001, (0.85 + 0.15 * enter) * (1 - exit * 0.4))}
+        scale={Math.max(0.001, 1 - exit * 0.4)}
       >
-        <Text3D
-          text={text.toUpperCase()}
+        <Letters3D
+          text={text}
           font={font}
-          faceColor={offroad ? '#F4ECE0' : '#FFFFFF'}
-          sideColor={offroad ? '#5A2508' : '#2A2A30'}
-          metalness={0.78}
-          roughness={0.2}
+          finish={theme === 'offroad' ? 'rust' : 'chrome'}
+          entrance="depth"
+          progress={letter}
           size={size}
-          depth={0.42}
           maxWidth={maxWidthPx * UNITS_PER_PX}
         />
       </group>
-    </ThreeCanvas>
+    </Stage3D>
   )
 }
 
