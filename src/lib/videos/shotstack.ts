@@ -13,6 +13,7 @@ import {
   FALLBACK_MUSIC_VOLUME,
 } from './audio-balance'
 import { getSignedUrlForPath } from './storage'
+import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 import { isDriveBadgeText } from './drive-badge'
 import {
   OUTPUT_WIDTH,
@@ -1626,7 +1627,25 @@ export async function renderSegmentsV2(
     sequence.reduce((acc, it) => acc + Number(it.trim_duration.toFixed(3)), 0).toFixed(3)
   )
 
-  const musicTrim = opts?.musicTrimStartSecOverride ?? 0
+  // Sin tramo manual → "Selección inteligente": parte más fuerte de la canción, alineada a los cortes.
+  let cutStartAcc = 0
+  const cutStartTimesSec = sequence.map((it) => {
+    const t = Number(cutStartAcc.toFixed(3))
+    cutStartAcc += it.trim_duration
+    return t
+  })
+  const musicTrim =
+    opts?.musicTrimStartSecOverride ??
+    (await pickSmartMusicTrimStartSec({
+      jobId,
+      musicUrl,
+      reelDurationSec: totalDuration,
+      cutStartTimesSec,
+    }))
+  console.log(
+    `[Shotstack][${jobId}] Música trim_start=${musicTrim.toFixed(2)}s ` +
+      `(${opts?.musicTrimStartSecOverride != null ? 'manual' : 'selección inteligente'})`
+  )
 
   let musicVolume = opts?.musicVolume
   let dialogueVolume = opts?.dialogueVolume
