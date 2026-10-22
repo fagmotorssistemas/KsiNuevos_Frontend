@@ -1,10 +1,10 @@
 /**
  * Director IA (beta, solo local): en vez del pipeline Shotstack, corre `reels-studio`
- * (AssemblyAI → Claude como director de marketing → gráficos 3D con Remotion) para un job
- * de `video_jobs_v2` y sube el MP4 al mismo bucket que el resto de reels.
+ * (AssemblyAI → Claude identifica el vehículo y monta → Claude escribe el motion graphics → HyperFrames renderiza)
+ * para un job de `video_jobs_v2` y sube el MP4 al mismo bucket que el resto de reels.
  *
- * Necesita Chromium + ffmpeg y varios minutos por video, así que no corre en Vercel: solo con
- * la web en una computadora (`npm run dev`) con `reels-studio` instalado.
+ * Necesita ffmpeg, el Chrome de HyperFrames (se descarga solo la primera vez) y varios minutos por video, así que no
+ * corre en Vercel: solo con la web en una computadora (`npm run dev`) con `reels-studio` instalado.
  */
 
 import { execFileSync, spawn } from 'node:child_process'
@@ -25,7 +25,7 @@ const TSX_CLI = path.join(STUDIO_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 /** Volumen de la música bajo la voz del asesor. */
 const MUSIC_VOLUME = 0.12
 /** Si reels-studio no termina en este tiempo, se corta (un render colgado no debe dejar el job "rendering" para siempre). */
-const STUDIO_TIMEOUT_MS = 40 * 60 * 1000
+const STUDIO_TIMEOUT_MS = 60 * 60 * 1000
 
 function getServiceClient() {
   return createClient<Database>(
@@ -231,15 +231,19 @@ function progressFromLine(line: string, clipCount: number): Progress | null {
     if (director[1] === 'estrategia') return { status: 'analyzing', step: 'Claude: plan creativo listo', pct: 62 }
     return { status: 'analyzing', step: 'Claude: diseñando el Reel', pct: 55 }
   }
-  if (line.startsWith('[plan]')) return { status: 'rendering', step: 'Armando la línea de tiempo', pct: 65 }
-  if (line.startsWith('[render] reintentando')) {
-    return { status: 'rendering', step: 'Render 3D: reintentando con otro lector de video', pct: 66 }
+  if (line.startsWith('[vehículo]')) return { status: 'analyzing', step: 'Claude: identificando el vehículo', pct: 50 }
+  if (line.startsWith('[plan]')) return { status: 'analyzing', step: 'Armando el montaje', pct: 64 }
+  // Motion graphics: Claude escribe la composición HyperFrames, la revisa y HyperFrames la renderiza.
+  const design = line.match(/^\[motion\] .+ · diseño (\S+)/)
+  if (design) return { status: 'analyzing', step: `Claude: motion graphics (${design[1]})`, pct: 66 }
+  if (/^\[motion\] .*escribiendo la composición/.test(line)) {
+    return { status: 'analyzing', step: 'Claude: escribiendo el motion graphics (2D y 3D)', pct: 70 }
   }
-  const render = line.match(/^\[render\] (\d+)%/)
-  if (render) {
-    const n = Number(render[1])
-    return { status: 'rendering', step: `Render 3D: ${n}%`, pct: 66 + Math.round(n * 0.3) }
-  }
+  if (line.startsWith('[check]')) return { status: 'analyzing', step: 'HyperFrames: revisando la composición', pct: 78 }
+  if (/^\[motion\] .*corrigiendo errores/.test(line)) return { status: 'analyzing', step: 'Claude: corrigiendo la composición', pct: 80 }
+  if (/^\[motion\] .*capturas/.test(line)) return { status: 'analyzing', step: 'Claude: revisando cómo se ve', pct: 84 }
+  if (line.startsWith('[render] preparando')) return { status: 'rendering', step: 'HyperFrames: preparando Chrome (solo la primera vez)', pct: 66 }
+  if (line.startsWith('[render] HyperFrames')) return { status: 'rendering', step: 'HyperFrames: renderizando el video', pct: 88 }
   return null
 }
 
@@ -269,8 +273,8 @@ function runStudio(jobId: string, args: string[], clipCount: number): Promise<vo
     })
     readline.createInterface({ input: child.stderr }).on('line', (line) => {
       remember(line)
-      // Remotion avisa por stderr cosas que no son errores (memoria del contenedor, three.js).
-      if (!/memory|cgroup|docker|THREE\.Clock/i.test(line)) console.warn(`[DirectorIA][${jobId}][stderr] ${line}`)
+      // HyperFrames y Chrome avisan por stderr cosas que no son errores (memoria del contenedor, WebGL por software).
+      if (!/memory|cgroup|docker|THREE\.Clock|GL Driver|GPU stall|Render:trace|@hf-progress/i.test(line)) console.warn(`[DirectorIA][${jobId}][stderr] ${line}`)
     })
     const watchdog = setTimeout(() => {
       tail.push(`reels-studio no terminó en ${STUDIO_TIMEOUT_MS / 60000} minutos; se detuvo`)
@@ -337,6 +341,11 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
       strategy?: string
       caption?: string
     }
+    // Diseño y dirección creativa del motion graphics: el próximo Reel de este auto no la repite.
+    const motionFile = path.join(outDir, 'motion.json')
+    const motion = fs.existsSync(motionFile)
+      ? (JSON.parse(fs.readFileSync(motionFile, 'utf8')) as { design?: string; direccion?: string | null; notas?: string })
+      : null
 
     const { data: prev } = await supabase.from('video_jobs_v2').select('social_publish_stage').eq('id', jobId).single()
     await updateJob(jobId, {
@@ -347,7 +356,14 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
       final_video_url: finalUrl,
       final_video_duration: Number((props.durationInFrames / props.fps).toFixed(2)),
       // Sin `sequence`: la interfaz no ofrece el editor de Shotstack para estos reels.
-      gemini_analysis: { director_ia: true, overall_strategy: plan.strategy ?? null, caption: plan.caption ?? null, plan },
+      gemini_analysis: {
+        director_ia: true,
+        motor: 'hyperframes',
+        overall_strategy: plan.strategy ?? null,
+        caption: plan.caption ?? null,
+        plan,
+        motion: motion ? { diseno: motion.design ?? null, direccion: motion.direccion ?? null, notas: motion.notas ?? null } : null,
+      },
       social_publish_stage: prev?.social_publish_stage ?? 'generado',
     })
     console.log(`[DirectorIA][${jobId}] Listo → ${finalUrl}`)

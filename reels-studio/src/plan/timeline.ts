@@ -1,15 +1,15 @@
 /**
- * Convierte el Plan Creativo del director (tiempos de fuente por clip) en la línea de tiempo
- * que dibuja Remotion (cuadros del Reel final), y arma los subtítulos a partir de las
- * palabras de AssemblyAI.
+ * Convierte el Plan Creativo del director (tiempos de fuente por clip) en el montaje del Reel
+ * (cuadros del Reel final) que recibe el director de motion graphics, y arma los subtítulos a
+ * partir de las palabras de AssemblyAI.
  *
  * Aquí viven las reglas que NO se le dejan al director: ajustar cortes a límites de palabra,
  * evitar que dos gráficos grandes se pisen, ocultar subtítulos cuando un gráfico ya dice
  * lo mismo, y calcular dónde queda en pantalla lo que el director señaló en el cuadro.
  */
-import { chooseZoomTarget } from '../reel/zoom'
-import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, HookStyle, RawGraphic, TranscriptFix, TypefaceName } from './schema'
-import { typefaceFor, validateGraphic } from './schema'
+import { chooseZoomTarget } from './zoom'
+import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, RawGraphic, TranscriptFix } from './schema'
+import { validateGraphic } from './schema'
 import type {
   Brand,
   CaptionLine,
@@ -33,10 +33,9 @@ export type BuildOptions = {
   height?: number
   brand: Brand
   music?: { src: string; volume: number; startSec?: number }
-  watermark?: string
-  /** Diseño del Reel; `offroad` para camionetas (lo decide run.ts según el tipo de vehículo). */
+  /** Reglas de tiempos: `offroad` para camionetas (lo decide run.ts según el tipo de vehículo). */
   theme?: ReelTheme
-  /** Lenguaje visual; por defecto `cine`. */
+  /** Ritmo de los golpes de cámara; por defecto `cine` (más sobrio). */
   look?: ReelLook
 }
 
@@ -691,18 +690,10 @@ export function buildReelProps(
       tailFrames,
       graphics,
       captions,
-      captionStyle,
-      hookStyle: plan.hookStyle ?? ('enfoque' satisfies HookStyle),
-      // Los SUV solo con sus letras elegantes, y esas solo en SUV (si el plan trae otra, se corrige aquí).
-      typeface: typefaceFor(theme === 'suv', plan.typeface) ?? ((theme === 'offroad' ? 'potente' : 'clasica') satisfies TypefaceName),
       theme,
-      look,
       sfx,
       brand: opts.brand,
       music: opts.music ?? null,
-      watermark: opts.watermark ?? '',
-      // render.ts decide el lector real (y reintenta con el otro); esto es lo que usa el Studio.
-      videoEngine: 'media',
     },
     warnings,
   }

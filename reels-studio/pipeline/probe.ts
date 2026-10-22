@@ -1,4 +1,15 @@
 import { execFileSync } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+/** Ruta de un clip relativa a reels-studio/public (así se guarda en el montaje). */
+export function toPublicSrc(file: string): string {
+  const rel = path.relative(path.join(ROOT, 'public'), path.resolve(file))
+  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`El clip debe estar dentro de reels-studio/public: ${file}`)
+  return rel.split(path.sep).join('/')
+}
 
 export type ProbeResult = { width: number; height: number; durationSec: number }
 

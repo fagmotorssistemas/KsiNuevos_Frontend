@@ -8,13 +8,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import {
-  CAPTION_STYLES,
   creativePlanSchema,
   cutSchema,
-  HOOK_STYLES,
   rawGraphicSchema,
   teaserBeatSchema,
-  TYPEFACE_NAMES,
   vehicleIdSchema,
   type CreativePlan,
   type FocusBox,
@@ -33,10 +30,7 @@ export const directorPlanSchema = creativePlanSchema.extend({
   vehiculo: vehicleIdSchema,
   cuts: z.array(cutSchema.extend({ energy: z.number().int().min(1).max(3) })).min(1),
   graphics: z.array(directorGraphicSchema),
-  captionStyle: z.enum(CAPTION_STYLES),
   teaser: z.array(teaserBeatSchema),
-  hookStyle: z.enum(HOOK_STYLES),
-  typeface: z.enum(TYPEFACE_NAMES),
 })
 export type DirectorPlan = z.infer<typeof directorPlanSchema>
 

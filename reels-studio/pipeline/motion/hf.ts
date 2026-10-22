@@ -8,7 +8,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const BIN = path.join(ROOT, 'node_modules/.bin/hyperframes')
+const WINDOWS = process.platform === 'win32'
+const BIN = path.join(ROOT, 'node_modules/.bin', WINDOWS ? 'hyperframes.cmd' : 'hyperframes')
 /** Chrome sin interfaz que ya trae el servidor (Playwright); si no está, HyperFrames usa el suyo. */
 const SERVER_CHROME = '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell'
 
@@ -20,9 +21,21 @@ function env(): NodeJS.ProcessEnv {
 }
 
 function run(args: string[], dir: string, timeoutMs = 15 * 60_000) {
-  const r = spawnSync(BIN, args, { cwd: dir, env: env(), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: timeoutMs })
+  // En Windows el binario es un .cmd: necesita la consola para ejecutarse.
+  const r = spawnSync(BIN, args, { cwd: dir, env: env(), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: timeoutMs, shell: WINDOWS })
   if (r.error) throw r.error
   return r
+}
+
+/**
+ * Chrome sin interfaz para renderizar: en el servidor ya está (Playwright); en una computadora nueva, HyperFrames lo
+ * descarga la primera vez (unos 100 MB) y después lo reutiliza.
+ */
+export function hfEnsureBrowser(dir: string): void {
+  if (env().HYPERFRAMES_BROWSER_PATH) return
+  console.log('[render] preparando el Chrome de HyperFrames (la primera vez se descarga)…')
+  const r = run(['browser', 'ensure'], dir, 10 * 60_000)
+  if (r.status !== 0) throw new Error(`No se pudo preparar el Chrome de HyperFrames: ${(r.stderr || r.stdout).slice(-600)}`)
 }
 
 type Finding = { code?: string; severity?: string; message?: string; selector?: string; time?: number; fix?: string }

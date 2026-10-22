@@ -120,6 +120,8 @@ export function briefText(props: ReelProps, vehicle: VehicleInfo, design: Motion
     ...cuts,
     props.tailFrames > 0 ? `- cola · ${tailStart.toFixed(2)}–${(props.durationInFrames / fps).toFixed(2)} s · foto del último cuadro (#cam-tail)` : '',
     '',
+    props.music ? `MÚSICA: hay música de fondo ya montada (#music, volumen ${props.music.volume}) debajo de la voz; tus golpes y transiciones pueden ir con su ritmo.` : 'MÚSICA: no hay; solo la voz y tus sonidos de apoyo.',
+    '',
     inserts.length ? 'TEASER (planos del auto encima de la voz del arranque, ya montados)' : 'TEASER: no hay.',
     ...inserts,
     '',

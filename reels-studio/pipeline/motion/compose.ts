@@ -35,7 +35,7 @@ const FONTS: Array<{ family: string; weight: number; style?: 'italic'; file: str
   { family: 'Cormorant Garamond', weight: 700, style: 'italic', file: 'CormorantGaramond-BoldItalic.woff2' },
 ]
 
-/** Fuentes 3D (typeface de three.js en src/three) con el nombre que usa el kit. */
+/** Fuentes 3D (typeface de three.js en motion/fonts3d) con el nombre que usa el kit. */
 const FONTS_3D: Record<string, string> = {
   russo: 'russo',
   anton: 'anton',
@@ -65,7 +65,27 @@ export const DESIGN_ACCENT: Record<MotionDesign, string> = {
   general: '#E81C2A',
 }
 
-export type ProjectMedia = { clipFiles: Record<string, string> }
+export type ProjectMedia = { clipFiles: Record<string, string>; music: string | null }
+
+/**
+ * Música de fondo dentro del proyecto (HyperFrames no lee nada de internet al renderizar): se descarga si es una URL
+ * o se copia si es un archivo. Devuelve la ruta para el HTML o null si no hay música.
+ */
+export async function fetchMusic(dir: string, src: string | undefined): Promise<string | null> {
+  if (!src) return null
+  const media = path.join(dir, 'assets/media')
+  fs.mkdirSync(media, { recursive: true })
+  const ext = (path.extname(new URL(src, 'file:///').pathname) || '.mp3').toLowerCase()
+  const target = path.join(media, `music${ext}`)
+  if (/^https?:\/\//.test(src)) {
+    const res = await fetch(src)
+    if (!res.ok) throw new Error(`No se pudo descargar la música (HTTP ${res.status})`)
+    fs.writeFileSync(target, Buffer.from(await res.arrayBuffer()))
+  } else {
+    fs.copyFileSync(path.isAbsolute(src) ? src : path.join(ROOT, 'public', src), target)
+  }
+  return `assets/media/music${ext}`
+}
 
 const sec = (frames: number, fps: number) => (frames / fps).toFixed(3)
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -90,7 +110,7 @@ function clipPath(src: string): string {
  * Copia el kit y los clips al proyecto. Los clips se enlazan (hardlink) si están en el mismo disco, para no
  * duplicar gigas; si no, se copian.
  */
-export function prepareProject(dir: string, props: ReelProps): ProjectMedia {
+export function prepareProject(dir: string, props: ReelProps, music: string | null = null): ProjectMedia {
   const assets = path.join(dir, 'assets')
   const kit = path.join(assets, 'kit')
   fs.mkdirSync(kit, { recursive: true })
@@ -113,7 +133,7 @@ export function prepareProject(dir: string, props: ReelProps): ProjectMedia {
   for (const f of FONTS) fs.copyFileSync(path.join(ROOT, 'public/fonts', f.file), path.join(kit, 'fonts', f.file))
   fs.mkdirSync(path.join(kit, 'fonts3d'), { recursive: true })
   for (const [name, file] of Object.entries(FONTS_3D)) {
-    const json = fs.readFileSync(path.join(ROOT, 'src/three', `${file}.typeface.json`), 'utf8')
+    const json = fs.readFileSync(path.join(ROOT, 'motion/fonts3d', `${file}.typeface.json`), 'utf8')
     fs.writeFileSync(path.join(kit, 'fonts3d', `${name}.js`), `window.__fonts3d = window.__fonts3d || {};\nwindow.__fonts3d[${JSON.stringify(name)}] = ${json};\n`)
   }
   copyDir(path.join(ROOT, 'public/sfx'), path.join(kit, 'sfx'))
@@ -146,7 +166,7 @@ export function prepareProject(dir: string, props: ReelProps): ProjectMedia {
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', lastSec.toFixed(3), '-i', clipPath(last.src), '-frames:v', '1', '-q:v', '3', tail])
   // Si el corte llega hasta el final del archivo, buscar ahí no devuelve cuadro: se toma uno de los últimos.
   if (!fs.existsSync(tail)) execFileSync('ffmpeg', ['-v', 'error', '-y', '-sseof', '-0.3', '-i', clipPath(last.src), '-frames:v', '1', '-q:v', '3', tail])
-  return { clipFiles }
+  return { clipFiles, music }
 }
 
 /** Grupos de subtítulos en HTML, con cada palabra y sus tiempos en segundos del Reel. */
@@ -196,6 +216,10 @@ export function skeletonHtml(props: ReelProps, media: ProjectMedia, design: Moti
     props.tailFrames > 0
       ? `  <div id="tail-shot" class="shot" style="z-index:${props.cuts.length + 1}"><div id="cam-tail" class="cam"><img id="tail" class="clip" src="assets/media/tail.jpg" data-start="${tailStart.toFixed(3)}" data-duration="${sec(props.tailFrames, fps)}" data-track-index="3" alt=""></div></div>`
       : ''
+  const music =
+    media.music && props.music
+      ? `  <audio id="music" class="clip" src="${media.music}" data-start="0" data-duration="${duration}" data-media-start="${(props.music.startSec ?? 0).toFixed(3)}" data-volume="${props.music.volume}" data-fade-out="1.5" data-track-index="4"></audio>`
+      : ''
   const fonts3d = Object.keys(FONTS_3D)
     .map((n) => `<script src="assets/kit/fonts3d/${n}.js"></script>`)
     .join('\n')
@@ -231,6 +255,7 @@ ${SLOT.css}
 ${shots}
 ${inserts}
 ${tail}
+${music}
   <canvas id="stage3d" width="1080" height="1920" data-layout-ignore></canvas>
   <div id="gfx">
 ${SLOT.markup}

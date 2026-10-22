@@ -1,9 +1,9 @@
 /**
- * Plan Creativo: el contrato entre Claude (director de marketing) y el render.
+ * Plan Creativo: el contrato entre Claude como director (montaje) y Claude como director de motion graphics.
  *
- * Claude NO dibuja nada: decide qué clips usar, en qué orden, qué gráfico va en cada
- * momento, con qué texto y dónde está en la imagen lo que se menciona. El render
- * (Remotion) convierte esas decisiones en animaciones 3D.
+ * El director NO dibuja nada: identifica el vehículo y decide qué clips usar, en qué orden, qué
+ * gráfico va en cada momento, con qué texto y dónde está en la imagen lo que se menciona. El
+ * director de motion graphics convierte esas decisiones en la composición HyperFrames (2D y 3D).
  *
  * Todos los tiempos del plan son "tiempo de fuente" (segundos dentro de cada clip),
  * porque así es como ve la transcripción de AssemblyAI. `timeline.ts` los pasa al

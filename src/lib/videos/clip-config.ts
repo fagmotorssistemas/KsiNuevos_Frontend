@@ -75,7 +75,8 @@ export interface VideoJobPipelineInputMeta {
   captionStyleVersion?: 'v1' | 'v2' | null
   /**
    * Director IA (beta, solo local): en vez del pipeline Shotstack, `reels-studio` arma el Reel
-   * (AssemblyAI → Gemini como director → gráficos 3D con Remotion). Ver `director-ia-local.ts`.
+   * (AssemblyAI → Claude identifica el vehículo y monta → Claude escribe el motion graphics → HyperFrames).
+   * Ver `director-ia-local.ts`.
    */
   directorIa?: boolean | null
 }

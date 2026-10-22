@@ -1,18 +1,20 @@
 /**
- * Reel completo: clips crudos → AssemblyAI → Claude (director) → Remotion.
+ * Reel completo: clips crudos → AssemblyAI (transcripción) → Claude director (identifica el vehículo y arma el
+ * montaje) → Claude director de motion graphics (escribe la composición HyperFrames) → HyperFrames (MP4).
  *
  *   npx tsx pipeline/run.ts --name trailblazer-2019 --vehicle vehiculo.json --clips ./clips
  *
- * Deja todo en out/<name>/ (transcripts.json, plan.json, props.json, reel.mp4). Si plan.json ya
- * existe se reutiliza: el equipo puede retocarlo a mano y volver a renderizar (usa --replan
- * para pedirle a Claude uno nuevo).
+ * Deja todo en out/<name>/: transcripts.json, plan.json, props.json, vehicle.json, motion/ (proyecto HyperFrames
+ * editable), motion.json (diseño y dirección creativa) y reel.mp4. Si plan.json ya existe se reutiliza: el equipo
+ * puede retocarlo a mano y volver a renderizar (--replan pide uno nuevo). --resume-motion reutiliza la composición
+ * que Claude ya escribió.
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { creativePlanSchema, typefaceFor, type CreativePlan } from '../src/plan/schema'
+import { creativePlanSchema, type CreativePlan } from '../src/plan/schema'
 import { buildReelProps } from '../src/plan/timeline'
 import type { ClipSource } from '../src/plan/types'
 import { transcribeClip, type TranscribedWord } from './assemblyai'
@@ -20,8 +22,8 @@ import type { VehicleInfo } from './director-prompt'
 import { classifyVehicle } from './vehicle-catalog'
 import { directReel, refineFocusBoxes } from './claude-director'
 import type { DirectorClip } from './director-plan'
-import { probeVideo } from './probe'
-import { renderReel, renderStills, toPublicSrc } from './render'
+import { runMotion } from './motion/engine'
+import { probeVideo, toPublicSrc } from './probe'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -46,8 +48,12 @@ const { values } = parseArgs({
     model: { type: 'string' },
     replan: { type: 'boolean', default: false },
     retranscribe: { type: 'boolean', default: false },
-    stills: { type: 'string' },
-    scale: { type: 'string', default: '1' },
+    /** Diseño de motion graphics forzado (camioneta, suv, deportivo, premium, superpremium, general). */
+    design: { type: 'string' },
+    /** Calidad del render de HyperFrames: draft | looks | delivery. */
+    quality: { type: 'string', default: 'looks' },
+    'no-review': { type: 'boolean', default: false },
+    'resume-motion': { type: 'boolean', default: false },
     music: { type: 'string' },
     'music-volume': { type: 'string', default: '0.12' },
     'music-start': { type: 'string', default: '0' },
@@ -134,8 +140,9 @@ const clips: Array<DirectorClip & ClipSource> = inputs.map((input, i) => {
     execFileSync('ffmpeg', [
       '-v', 'error', '-y', '-i', input,
       '-vf', hdr && HAS_ZSCALE ? `${HDR_TO_SDR},${scale}` : scale,
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p',
-      // Siempre etiquetado como SDR BT.709: así Remotion no intenta convertir colores HDR.
+      // Un cuadro clave por segundo: HyperFrames busca cuadros sueltos y con claves lejanas el video se congela.
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p', '-g', '30',
+      // Siempre etiquetado como SDR BT.709: así el render no intenta convertir colores HDR.
       '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
       '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', file,
     ])
@@ -194,37 +201,32 @@ if (plan.vehiculo) {
   vehicle.hibrido = id.hibrido
 }
 fs.writeFileSync(path.join(outDir, 'vehicle.json'), JSON.stringify(vehicle, null, 2))
-const isSuv = vehicle.categoria === 'suv'
-const typeface = typefaceFor(isSuv, plan.typeface, vehicle.tipografiasRecientes)
-if (typeface !== plan.typeface) {
-  console.warn(`[plan] tipografía ${plan.typeface ?? '(ninguna)'} → ${typeface}: ${isSuv ? 'los SUV usan sus letras elegantes' : 'las elegantes son solo para SUV'}`)
-  plan = { ...plan, typeface }
-  const saved = JSON.parse(fs.readFileSync(planFile, 'utf8'))
-  fs.writeFileSync(planFile, JSON.stringify({ ...saved, typeface }, null, 2))
-}
 
-// 4) Línea de tiempo y render.
+// 4) Línea de tiempo (montaje).
 const music = values.music
   ? { src: values.music, volume: Number(values['music-volume']), startSec: Math.max(0, Number(values['music-start']) || 0) }
   : undefined
 const { props, warnings } = buildReelProps(plan, clips, transcripts, {
   brand: { logoSrc: 'ksi-logo.png', accent: '#E81C2A', highlight: '#FFE94A', whatsapp: values.whatsapp },
   music,
-  // Camionetas: su propio diseño offroad completo (formato de referencia de la Ranger: metal oxidado en 3D, llanta 3D,
-  // escáner K-SI SCAN, caja de comentario). SUV: modo cine elegante (champán, cromo dorado y letras propias). Todos
-  // los demás: modo cine.
-  theme: vehicle.categoria === 'camioneta' ? 'offroad' : isSuv ? 'suv' : 'ksi',
-  look: vehicle.categoria === 'camioneta' ? 'social' : 'cine',
+  // Camionetas: tiempos propios (cierre más largo, subtítulos más cortos). El diseño visual lo decide el director de
+  // motion graphics según el vehículo.
+  theme: vehicle.categoria === 'camioneta' ? 'offroad' : 'ksi',
 })
 for (const w of warnings) console.warn(`[plan] ${w}`)
 fs.writeFileSync(path.join(outDir, 'props.json'), JSON.stringify(props, null, 2))
 console.log(`[plan] ${props.cuts.length} cortes, ${props.graphics.length} gráficos, ${(props.durationInFrames / props.fps).toFixed(1)} s`)
 
-if (values.stills) {
-  const files = await renderStills(props, values.stills.split(',').map(Number), outDir, Number(values.scale))
-  console.log(files.join('\n'))
-} else {
-  const out = path.join(outDir, 'reel.mp4')
-  await renderReel(props, out, { scale: Number(values.scale) })
-  console.log(`[render] listo → ${out}`)
-}
+// 5) Motion graphics de Claude y render con HyperFrames.
+const motion = await runMotion({
+  props,
+  vehicle,
+  dir: path.join(outDir, 'motion'),
+  out: path.join(outDir, 'reel.mp4'),
+  design: values.design,
+  review: !values['no-review'],
+  quality: values.quality,
+  resume: values['resume-motion'],
+})
+fs.writeFileSync(path.join(outDir, 'motion.json'), JSON.stringify(motion, null, 2))
+console.log(`[motion] diseño ${motion.design}${motion.direccion ? ` · dirección ${motion.direccion}` : ''}`)

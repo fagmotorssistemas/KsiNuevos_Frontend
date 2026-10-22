@@ -1,6 +1,7 @@
 /**
- * Props que consume la composición de Remotion. Todo en cuadros (frames) del Reel final
- * y en píxeles del lienzo vertical. Debe ser JSON serializable (se pasa como inputProps).
+ * El montaje del Reel (lo que arma timeline.ts a partir del plan de Claude): tomas, teaser, subtítulos y momentos de
+ * gráficos, todo en cuadros (frames) del Reel final y en píxeles del lienzo vertical. Es lo que recibe el director de
+ * motion graphics para escribir la composición HyperFrames. JSON serializable (se guarda como props.json).
  */
 import type { CaptionStyle, CUT_ROLES, FocusBox, HookStyle, PLACEMENTS, RawGraphic, TRANSITIONS, TypefaceName } from './schema'
 
@@ -119,34 +120,17 @@ export type ReelProps = {
   height: number
   durationInFrames: number
   cuts: TimelineCut[]
-  /** Teaser encima de la voz del arranque. Siempre explícito, como `music`. */
+  /** Teaser encima de la voz del arranque. */
   inserts: TimelineInsert[]
   /** Cola final (último cuadro congelado) para que el CTA respire. */
   tailFrames: number
   graphics: TimelineGraphic[]
   captions: CaptionLine[]
-  /** Tipografía y animación de los subtítulos, elegida por el director. Siempre explícito, como `music`. */
-  captionStyle: CaptionStyle
-  /** Cómo entra el texto del gancho, elegido por el director. Siempre explícito, como `music`. */
-  hookStyle: HookStyle
-  /** Juego tipográfico de los títulos, elegido por el director. Siempre explícito, como `music`. */
-  typeface: TypefaceName
-  /** Siempre explícito, como `music`. */
+  /** Reglas de tiempos con que se armó: `offroad` (camionetas: cierre más largo, subtítulos más cortos) o `ksi`. */
   theme: ReelTheme
-  /** Siempre explícito, como `music`. */
-  look: ReelLook
+  /** Golpes de sonido sugeridos por el montaje (el director de motion graphics pone los suyos). */
   sfx: SfxCue[]
   brand: Brand
-  /**
-   * `startSec`: desde qué segundo de la pista empieza a sonar. Siempre explícito (null = sin música):
-   * Remotion mezcla las props con las de la muestra por defecto y un campo ausente se heredaría.
-   */
+  /** Música de fondo: `startSec` = desde qué segundo de la pista empieza a sonar (null = sin música). */
   music: { src: string; volume: number; startSec?: number } | null
-  /** Marca de agua de depuración (p. ej. "MUESTRA"); '' en producción. Siempre explícito, como `music`. */
-  watermark: string
-  /**
-   * Cómo se leen los clips: 'offthread' (extractor de Remotion, el estándar) o 'media'
-   * (WebCodecs dentro de Chrome; plan B si el extractor falla en esa computadora).
-   */
-  videoEngine: 'offthread' | 'media'
 }

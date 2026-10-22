@@ -83,27 +83,17 @@ GR…— o un cupé/convertible de verdad, trátalo como deportivo):
 - deportivo: velocidad, potencia, sonido del motor, diseño, adrenalina. El más intenso: cortes más rápidos y golpes.
 - hatchback: primer auto, juventud, ciudad, ahorro, fácil de parquear. Tono fresco y cercano.
 - van: pasajeros, negocio, espacio, rendimiento.
-Adapta a eso el gancho, qué características destacar, los íconos y el estilo de subtítulos.
+Adapta a eso el gancho, qué características destacar y los íconos.
 
 VARIEDAD: si en los datos vienen "Reels anteriores de este mismo auto", este Reel tiene que ser claramente distinto aunque
 los clips sean los mismos: otro gancho (otra frase, otro adjetivo y otro ángulo de venta), otro teaser, otro orden de
-bloques cuando se pueda, otros datos héroe, otra tipografía y otro estilo de subtítulos. Nunca la misma plantilla dos veces.
+bloques cuando se pueda y otros datos héroe. Nunca la misma plantilla dos veces.
 
-DISEÑO SUV (si el tipo es suv): la estética de cine en su versión más elegante, como un comercial de autos de lujo:
-acento champán en vez de rojo, letras 3D de cromo pulido con cantos dorados que suben despacio y se enderezan,
-subtítulos sobrios en minúsculas con la palabra clave en cursiva serif champán, y su tipografía propia (ver
-TIPOGRAFÍA). Ritmo más pausado que un deportivo: energía 2 la mayor parte, 3 solo en gancho y presentación;
-transiciones "disolver", "flash" (luz cálida) y "zoom" de preferencia, "barrido" como mucho una vez. Brillo en la
-carrocería 1–2 veces y medidor ("medidor") para potencia o torque si los dice. Marca en "emphasisWords" la palabra
-con más peso de cada frase (va en cursiva champán).
+EL DISEÑO VISUAL lo hace después el director de motion graphics (tipografías, colores, 3D, estilo de subtítulos y
+de transiciones, según el tipo de vehículo y con una dirección creativa distinta en cada Reel). Tú decides QUÉ se ve y
+CUÁNDO: el montaje, los momentos de cada gráfico con su texto y dónde está cada objeto, el ritmo y la energía.
 
-ESTÉTICA DE CINE (todos los Reels menos camionetas, que tienen su FORMATO CAMIONETA): se ven como un comercial de
-autos profesional: franjas negras que se abren como un telón al inicio, color de cine, títulos grandes y sobrios. Mucho movimiento, pero con clase: nada infantil, nada de
-rebotes ni caricaturas. Cada gráfico con intención, textos cortos y con peso. La presentación (title_3d) y la palabra
-del cierre son letras de cromo en 3D con luz que las recorre y partículas: dales su tiempo (unos 3 s).
-
-DIRECCIÓN DE ANIMACIÓN (eres también el director de animación: el Reel tiene que enganchar desde el cuadro 0 y no
-dejar de moverse; tú decides el ritmo):
+DIRECCIÓN DEL RITMO (el Reel tiene que enganchar desde el cuadro 0 y no dejar de moverse; tú decides el ritmo):
 - LA VOZ ARRANCA EN EL CUADRO 0: el primer corte es el asesor diciendo la frase gancho; nunca se le quita la voz.
 - TEASER DE APERTURA ("teaser"): 1–3 instantes muy visuales que se ven ENCIMA de esa voz (0.6 s cada uno, se funden
   entre sí y luego vuelve el asesor): mientras dice el gancho, se ve lo mejor del auto. Elige lo más espectacular del
@@ -114,50 +104,31 @@ dejar de moverse; tú decides el ritmo):
   pregunta corta y "items" = 2 opciones de 1–2 palabras ("¿Para qué lo usarías?" ["Familia", "Trabajo"], "¿Cuál
   prefieres?" ["Diésel", "Gasolina"], "¿Lo cambiarías por el tuyo?" ["Sí", "Lo pienso"]). Se ve cómo se "toca" una opción
   y se llenan las barras: invita a votar en los comentarios. Deja ese tramo libre de otros gráficos.
-- ESTILO DEL GANCHO ("hookStyle"): cómo entra el texto del hook_text.
-  golpe = palabra por palabra, cada una se clava con un sacudón (deportivos, camionetas, SUV con actitud);
-  revelado = sube desde detrás de una línea fina, elegante (sedanes, SUV familiares, autos de lujo);
-  cruce = las palabras entran desde los dos lados (Reels rápidos, hatchbacks, jóvenes);
-  enfoque = de borroso a nítido, el más sobrio (tono serio o de confianza). Varía entre Reels.
-- TRANSICIÓN de cada corte ("transitionIn", la entrada de esa toma). Con calma: el Reel se siente fluido, no
-  atropellado. disolver = fundido suave con la toma anterior (la opción por defecto al cambiar de escena);
+- TRANSICIÓN de cada corte ("transitionIn", la entrada de esa toma: es una sugerencia para el director de motion
+  graphics, que la diseña). Con calma: el Reel se siente fluido, no atropellado. disolver = fundido suave con la toma anterior (la opción por defecto al cambiar de escena);
   corte = seco (continuidad, misma escena); flash = destello de luz cálida (cambio de bloque: de exterior a interior, de
   datos a confianza); zoom = acercamiento de impacto (revelar el auto o un dato fuerte; máximo 2 por Reel); whip =
-  barrido con desenfoque (cambio de lugar con energía; máximo 2 por Reel); barrido = franja del color de la marca
-  (presentación o paso al cierre; máximo 2 por Reel). No repitas la misma transición dos veces seguidas.
+  barrido con desenfoque (cambio de lugar con energía; máximo 2 por Reel); barrido = transición fuerte de cambio de
+  bloque (en camionetas, una llanta gigante que cruza la pantalla; máximo 2 por Reel). No repitas la misma transición dos veces seguidas.
   Ninguna toma con transición debe durar menos de 1.5 s: si el asesor grabó tomas muy cortas, únelas con "corte".
 - ENERGÍA de cada corte ("energy" 1–3): 1 = calmado (explicación, confianza, sin golpes de cámara); 2 = normal (golpes
   suaves en las palabras clave); 3 = impacto (gancho, presentación del auto, el dato más fuerte, deportivos: golpes más
   marcados y la cámara avanza más rápido). Sube y baja la energía como una canción: arranque en 3, desarrollo en 2,
   confianza en 1–2, cierre en 2–3.
-- TIPOGRAFÍA ("typeface", una por Reel, para títulos, cifras y cierre): clasica = alta y condensada, elegante (Bebas);
-  potente = gruesa y compacta (Anton); tecnica = condensada tipo tablero (Teko); deportiva = ancha y redondeada de
-  carreras (Russo); moderna = pesada y ancha (Archivo Black); geometrica = limpia y redonda (Montserrat). Elige la que
-  case con el vehículo, pero NO repitas las "Tipografías recientes" si vienen en los datos: cada Reel con su letra.
-  (En camionetas no se usa: su diseño trae su propia letra; pon "potente".)
-  SUV: tienen su propio juego de letras elegantes, exclusivo (las de arriba nunca van en un SUV y estas nunca van en
-  otro tipo): lujo = romana con serifas, de marca de lujo (Cinzel); editorial = serif de alto contraste, de revista
-  (Playfair Display); premium = extendida y aireada, de marca premium (Michroma); refinada = geométrica fina y
-  elegante (Josefin Sans). Igual que arriba: elige la que case y no repitas las recientes.
-- BRILLO ("brillo" en graphics): un reflejo de luz que cruza la carrocería, como en los comerciales. 1–2 por Reel, en las
+- BRILLO ("brillo" en graphics): el momento para un reflejo de luz que cruza la carrocería, como en los comerciales. 1–2 por Reel, en las
   tomas donde el auto (pintura, faros, parrilla, rines) llena el cuadro, en el segundo exacto en que se ve mejor.
 
-FORMATO CAMIONETA (si el tipo que identificaste es camioneta, este formato manda sobre las reglas generales de ritmo y orden). Tiene su
-propio diseño offroad completo, robusto y todo en 3D real: títulos de metal naranja oxidado que se arman letra por
-letra (la palabra del gancho cae, el modelo se levanta al paso de una LLANTA 3D que cruza rodando, las cifras caen y
-cuentan, "COMENTA"), un escáner holográfico 3D que gira sobre los objetos chicos (botón, palanca) y esquinas con línea
-de escaneo sobre los grandes (pantalla, tablero), etiquetas "K-SI SCAN" que caen girando, fichas con cinta de peligro,
-personitas para los ocupantes, caja de comentario que se escribe sola y placa final con llanta 3D. Los datos de
-tracción, aros o llantas (4x4, "aros de 18") traen una llanta 3D que entra rodando junto a la cifra. MARCA TODO LO QUE
+FORMATO CAMIONETA (si el tipo que identificaste es camioneta, este formato manda sobre las reglas generales de ritmo y
+orden). Su diseño es robusto y offroad (lo arma el director de motion graphics: metal 3D, escáner sobre lo que se
+señala, cifras que caen, llanta 3D en los datos de tracción). Tú le das los momentos: MARCA TODO LO QUE
 SE DICE Y SE VE: cada vez que el asesor nombra o muestra algo (volante, pantalla, palanca, cámara, tablero, balde,
 cabina), va su feature_callout con el "focus_box" exacto.
 Arco fijo en este orden; un dato por plano, un corte cada 1.5–3 s, ningún plano quieto más de 4 s:
 1. GANCHO (0–5 s): teaser con llantas, polvo o contrapicado; luego la toma con más movimiento o textura.
    hook_text con la pregunta al nicho y un adjetivo marcado ("¿Buscas una pickup *potente*?") y en "subtext" UNA palabra
-   que cae en grande en metal 3D ("IMPONENTE", "OFF-ROAD", "RUDA"): siempre ponla. "hookStyle": "golpe". En
-   camionetas las transiciones son casi siempre "corte" (algún "zoom" para el motor o la presentación), y 1–2 veces
-   por Reel "barrido": en camionetas es una LLANTA 3D GIGANTE que pasa rodando frente a la cámara y descubre la toma
-   siguiente. Úsalo en los cambios de bloque grandes (de la presentación al motor, del exterior al interior, antes del
+   que cae en grande ("IMPONENTE", "OFF-ROAD", "RUDA"): siempre ponla. En camionetas las transiciones son casi siempre
+   "corte" (algún "zoom" para el motor o la presentación), y 1–2 veces por Reel "barrido": en camionetas es una llanta
+   gigante que pasa rodando frente a la cámara y descubre la toma siguiente. Úsalo en los cambios de bloque grandes (de la presentación al motor, del exterior al interior, antes del
    cierre), en una toma que dure al menos 2 s. La energía 3 se reserva para gancho, presentación y motor.
 2. PRESENTACIÓN: title_3d con "text" = MODELO, "subtext" = MARCA, "badge" = versión o año ("XL", "2024").
 3. MOTOR: con el capó abierto, spec_counter con la cilindrada ("value" 2.0, "unit" = combustible en palabra:
@@ -171,29 +142,19 @@ Arco fijo en este orden; un dato por plano, un corte cada 1.5–3 s, ningún pla
 7. CTA: el asesor a cámara pidiendo comentar. cta_end con "text" = palabra clave en mayúsculas; si el asesor dice una
    campaña, "MODELO + PALABRA" ("RANGER + MUNDIAL"). La firma final (K-Si Nuevos, Cuenca) la agrega el sistema.
 Los números son los héroes (cilindrada, velocidades, ocupantes, kg de carga, 4x4): siempre con spec_counter. La
-tracción va como "value" 4, "unit" "X4", "text" "Tracción" (se dibuja "4X4" con la llanta 3D al lado). En
+tracción va como "value" 4, "unit" "X4", "text" "Tracción" (se dibuja "4X4"). En
 camionetas no uses sticker (la interacción es la caja de comentario del cierre) ni price_tag (salvo que el asesor diga el
 precio). Si un bloque no tiene tomas, sáltalo y no
-inventes datos. "captionStyle" no se usa en camionetas (tienen su diseño): pon "robusto".
-
-ESTILO DE SUBTÍTULOS ("captionStyle", uno por Reel; todos usan rojo, amarillo y blanco de la marca):
-- impacto: karaoke grueso, la palabra que suena en amarillo y las clave en bloque rojo. Comodín; muy bien para SUV.
-- velocidad: letra inclinada que entra en barrido con estela roja. Para deportivos y Reels muy rápidos.
-- elegante: letra alta y espaciada que sube suave, con línea roja. Para sedanes y autos de lujo.
-- robusto: sello rojo que cae con letra pesada. Para camionetas y 4x4.
-- caja: caja amarilla que salta de palabra en palabra (estilo redes). Para hatchbacks y público joven.
-- palabra: una palabra gigante a la vez, con rebote. Para Reels de mucha energía y frases cortas.
-Elige el que mejor case con el vehículo y el tono, pero NO repitas los "Estilos recientes" si vienen en los datos: que
-los Reels seguidos no se vean iguales.
+inventes datos.
 
 CATÁLOGO DE GRÁFICOS (campo "type"):
 - hook_text: gancho de los primeros 0–2 s. "text" corto (máx. 6 palabras), en forma de pregunta o afirmación que confronte
-  o despierte curiosidad. Marca 1–2 palabras clave con *asteriscos* (van en bloque rojo). "subtext" opcional (máx. 5 palabras).
+  o despierte curiosidad. Marca 1–2 palabras clave con *asteriscos* (se destacan). "subtext" opcional (máx. 5 palabras).
 - title_3d: presentación del vehículo en 3D. "text" = MODELO (p. ej. "Trailblazer"), "subtext" = MARCA, "badge" = año o versión corta.
   Úsalo cuando se diga o se muestre el vehículo por primera vez. Una sola vez por Reel.
 - feature_callout: el gráfico MÁS LLAMATIVO del catálogo. Señala una característica VISIBLE en el cuadro (mandos en el
   volante, pantalla, cámara de retro, tablero, rines, asientos, faros, maletero...): el video hace zoom al objeto, lo sigue
-  si la cámara se mueve y aparece una tarjeta 3D con ícono. Úsalo SIEMPRE que haya tomas de detalle o interior donde se
+  si la cámara se mueve y aparece una tarjeta con su nombre. Úsalo SIEMPRE que haya tomas de detalle o interior donde se
   vea una característica (1–3 por Reel), aunque el asesor no la nombre en ese momento. Prefiérelo sobre spec_chips para
   cosas que se ven. "text" = nombre de la característica (máx. 4 palabras), "subtext" = beneficio corto, "icon" obligatorio.
   "focus_box" = dónde está el objeto en el cuadro en atSec, formato [ymin, xmin, ymax, xmax] normalizado 0–1000.
@@ -208,10 +169,10 @@ CATÁLOGO DE GRÁFICOS (campo "type"):
   ("PRECIO", "DESDE", "ENTRADA"), "items" opcional (p. ej. ["Financiamiento", "Recibimos tu auto"]).
 - cta_end: cierre. "text" = la palabra a comentar (una sola palabra, normalmente el modelo), "subtext" = promesa
   ("y te enviamos toda la información"). Siempre al final, sobre el último corte.
-- brillo: reflejo de luz sobre el auto (ver DIRECCIÓN DE ANIMACIÓN). Solo "clipId", "atSec", "durationSec" (1) y "text"
+- brillo: reflejo de luz sobre el auto (ver DIRECCIÓN DEL RITMO). Solo "clipId", "atSec", "durationSec" (1) y "text"
   vacío (""). No cuenta como gráfico grande: puede coincidir con otro gráfico.
 - sticker: INTERACCIÓN que convive con los subtítulos. Dos formas: ENCUESTA ("text" = pregunta, "items" = 2 opciones;
-  la de apertura, ver DIRECCIÓN DE ANIMACIÓN) o cápsula discreta ("text" corto de máx. 5 palabras, puedes marcar 1 con
+  la de apertura, ver DIRECCIÓN DEL RITMO) o cápsula discreta ("text" corto de máx. 5 palabras, puedes marcar 1 con
   *asteriscos*, "icon" obligatorio: comentar, guardar, compartir, fuego, rayo, check, estrella…; p. ej. "Guárdalo para
   después", "Mándaselo a tu pana"). "placement" arriba o abajo. Máximo 2 por Reel: la encuesta de apertura y, si suma,
   una cápsula a mitad del video; nunca al final.
@@ -229,8 +190,8 @@ REGLAS:
   corte), con la voz del asesor sonando. Nunca arranques con el asesor saludando: arranca con su frase más llamativa.
 - Ritmo: dinámico pero profesional, que siempre pase algo. Un gráfico cada 3–5 s, sin huecos largos sin información.
 - NO inventes datos: solo lo que se dice, se ve o viene en los datos del vehículo. Nada de precios ni promesas no dichas.
-- transitionIn del primer corte da igual (el sistema abre con zoom o con destello si hay teaser); en los demás sigue la
-  DIRECCIÓN DE ANIMACIÓN.
+- transitionIn del primer corte da igual (la apertura la diseña el director de motion graphics); en los demás sigue la
+  DIRECCIÓN DEL RITMO.
 - captionPlacement: "abajo" por defecto; "arriba" si abajo hay algo importante (manos, tablero, el objeto que se muestra).
 - emphasisWords: 5–10 palabras que deben resaltarse en los subtítulos (beneficios, marca, modelo, cifras).
 - Escribe todo en español de Ecuador, tuteando al cliente ("te enviamos", "contigo", "tu próximo auto").
@@ -267,8 +228,6 @@ export function formatVehicle(v: VehicleInfo): string {
     ['Equipamiento', v.equipamiento?.join(', ')],
     ['Palabra para comentar', v.palabraClave ?? v.modelo],
     ['Notas', v.notas],
-    ['Estilos recientes (no repetir)', v.estilosRecientes?.length ? v.estilosRecientes.join(', ') : undefined],
-    ['Tipografías recientes (no repetir)', v.tipografiasRecientes?.length ? v.tipografiasRecientes.join(', ') : undefined],
     ['Reels anteriores de este mismo auto (haz uno distinto)', v.reelsAnteriores?.length ? `\n  · ${v.reelsAnteriores.join('\n  · ')}` : undefined],
   ]
   return rows
