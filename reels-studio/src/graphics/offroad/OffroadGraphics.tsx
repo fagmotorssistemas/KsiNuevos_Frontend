@@ -23,16 +23,15 @@ function reveal(frame: number, delay: number, dur = 8): number {
 /** Estilo común de entrada: aparece subiendo un poco. */
 const rise = (t: number, distance = 26): React.CSSProperties => ({ opacity: t, transform: `translateY(${(1 - t) * distance}px)` })
 
-/** Gancho: barro en los bordes, la pregunta completa (clave en naranja) y el adjetivo rústico encima. */
+/** Gancho: la pregunta completa (clave en naranja) y el adjetivo rústico encima. */
 export const OffroadHook: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, width, height, exit } = useEnterExit(10)
+  const { frame, height, exit } = useEnterExit(10)
   const words = splitEmphasis(g.text)
   const big = g.subtext?.trim()
 
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
       <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 38%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.6) 100%)' }} />
-      <MudSplatter frame={frame} width={width} height={height} fade={exit} />
       {big ? (
         <div style={{ position: 'absolute', top: height * 0.2, left: 0, right: 0, display: 'flex', justifyContent: 'center', ...rise(reveal(frame, 16, 9), 30) }}>
           <RustyText text={big} size={big.length > 9 ? 116 : 156} />
@@ -59,6 +58,15 @@ export const OffroadHook: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
       </div>
     </AbsoluteFill>
   )
+}
+
+/**
+ * Barro: salpicón de lodo en pantalla en el instante en que se ve la camioneta (como si pisara un charco). Lo pone el
+ * director solo en tomas del vehículo, nunca sobre una persona.
+ */
+export const OffroadMud: React.FC = () => {
+  const { frame, width, height, exit } = useEnterExit(12)
+  return <MudSplatter frame={frame} width={width} height={height} fade={exit} />
 }
 
 /** Presentación: marca en blanco, modelo rústico grande y la versión/año debajo, entrando en ese orden. */

@@ -250,14 +250,21 @@ const Splat: React.FC<{ seed: string; r: number }> = ({ seed, r }) => {
   )
 }
 
-/** Pocas manchas, en las orillas: ensucian la pantalla sin tapar el carro. */
+/**
+ * Salpicón de barro como si la camioneta pisara un charco frente a la cámara: casi todo sale desde abajo (la altura de
+ * la llanta) hacia las orillas, en cadena rápida, sin tapar el centro donde va el vehículo.
+ */
 const SPLATS = [
-  { x: 0.9, y: 0.09, r: 52, at: 3 },
-  { x: 0.06, y: 0.47, r: 42, at: 6 },
-  { x: 0.1, y: 0.9, r: 58, at: 9 },
+  { x: 0.12, y: 0.86, r: 64, at: 0 },
+  { x: 0.86, y: 0.82, r: 56, at: 2 },
+  { x: 0.3, y: 0.95, r: 46, at: 3 },
+  { x: 0.95, y: 0.6, r: 40, at: 5 },
+  { x: 0.05, y: 0.62, r: 36, at: 6 },
+  { x: 0.7, y: 0.97, r: 50, at: 7 },
+  { x: 0.9, y: 0.12, r: 30, at: 9 },
 ]
 
-/** Barro en el gancho: cada mancha aparece de golpe (como un salpicón) y se desvanece al final. */
+/** Cada mancha aparece de golpe (como un salpicón) y todas se desvanecen con `fade`. */
 export const MudSplatter: React.FC<{ frame: number; width: number; height: number; fade: number }> = ({ frame, width, height, fade }) => (
   <svg width={width} height={height} style={{ position: 'absolute', inset: 0, opacity: 1 - fade }}>
     {SPLATS.map((s, i) => {

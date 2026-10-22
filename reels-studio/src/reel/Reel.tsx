@@ -8,7 +8,7 @@ import { PriceTag } from '../graphics/PriceTag'
 import { SpecChips } from '../graphics/SpecChips'
 import { SpecCounter } from '../graphics/SpecCounter'
 import { Sticker } from '../graphics/Sticker'
-import { OffroadCallout, OffroadCounter, OffroadCta, OffroadHook, OffroadList, OffroadTitle } from '../graphics/offroad/OffroadGraphics'
+import { OffroadCallout, OffroadCounter, OffroadCta, OffroadHook, OffroadList, OffroadMud, OffroadTitle } from '../graphics/offroad/OffroadGraphics'
 import { CineCallout, CineCounter, CineCta, CineHook, CineList, CinePrice, CineSticker, CineTitle } from '../graphics/cine/CineGraphics'
 import { CineFrame, TypefaceProvider } from '../graphics/cine/kit'
 import { Title3D } from '../graphics/Title3D'
@@ -30,8 +30,9 @@ const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand; theme: ReelTheme; lo
   look,
   hookStyle,
 }) => {
-  // El brillo es solo luz sobre el auto: igual en todos los diseños.
+  // El brillo es solo luz sobre el auto: igual en todos los diseños. El barro es solo de camionetas.
   if (g.type === 'brillo') return <Brillo g={g} theme={theme} />
+  if (g.type === 'barro') return theme === 'offroad' ? <OffroadMud /> : null
   if (look === 'cine') {
     switch (g.type) {
       case 'hook_text':

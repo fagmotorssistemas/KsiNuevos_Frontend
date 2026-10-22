@@ -109,11 +109,15 @@ dejar de moverse; tú decides el ritmo):
 
 FORMATO CAMIONETA (si "Tipo" es camioneta, este formato manda sobre las reglas generales de ritmo y orden). Tiene su
 propio diseño offroad completo, robusto: títulos naranjas rústicos con relieve 3D (modelo, cilindrada, "COMENTA"),
-barro en el gancho, etiquetas tipo escáner "K-SI SCAN" con esquinas o una mira que gira sobre lo que se señala,
+salpicones de barro, etiquetas tipo escáner "K-SI SCAN" con esquinas o una mira que gira sobre lo que se señala,
 fichas con cinta de peligro, personitas para los ocupantes, caja de comentario que se escribe sola y firma final con
 huella de llanta. MARCA TODO LO QUE SE DICE Y SE VE: cada vez que el asesor nombra o muestra algo (volante, pantalla,
-palanca, cámara, tablero, balde, cabina), va su feature_callout con el "focus_box" exacto. Arco fijo en este orden; un
-dato por plano, un corte cada 1.5–3 s, ningún plano quieto más de 4 s:
+palanca, cámara, tablero, balde, cabina), va su feature_callout con el "focus_box" exacto.
+BARRO ("barro" en graphics, solo camionetas): salpicón de lodo en pantalla, como si la camioneta pisara un charco frente
+a la cámara. Ponlo en el instante en que se ve la camioneta, mejor si avanza o se ven sus llantas (presentación,
+exterior, contrapicado); 1–2 por Reel, con "text" vacío (""). NUNCA en una toma donde aparece una persona (el asesor
+hablando, alguien junto al vehículo) ni en el interior.
+Arco fijo en este orden; un dato por plano, un corte cada 1.5–3 s, ningún plano quieto más de 4 s:
 1. GANCHO (0–5 s): teaser con llanta, barro, polvo o contrapicado; luego la toma con más movimiento o textura.
    hook_text con la pregunta al nicho y un adjetivo marcado ("¿Buscas una pickup *potente*?") y en "subtext" UNA palabra
    que cae en grande ("IMPONENTE", "OFF-ROAD", "RUDA"). "hookStyle": "golpe". En camionetas las transiciones son
