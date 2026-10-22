@@ -91,6 +91,7 @@ import type { GoogleFileRef } from './google-file-api'
 /**
  * false = pipeline usa solo lo dicho en el audio (Assembly). No enlaza guión de marketing
  * ni mezcla dialogo/texto_pantalla del guión con la transcripción.
+ * El PDF de guion subido al crear el Reel no depende de esto: siempre se envía a Gemini como guía de orden.
  */
 const USE_MARKETING_SCRIPT_IN_PIPELINE = false
 
@@ -693,13 +694,8 @@ export async function runSingleVideoPipelineFromStorage(
     const formattedMap = formatSegmentMapForPrompt(segments)
     const googleRefs = googleFileRef ? [googleFileRef] : []
     const ctx = await fetchJobGeminiContext(jobId)
-    const scriptGuidanceText = USE_MARKETING_SCRIPT_IN_PIPELINE
-      ? (ctx.scriptText ?? undefined)
-      : undefined
-    const scriptDialogues =
-      USE_MARKETING_SCRIPT_IN_PIPELINE && ctx.scriptText
-        ? extractQuotedDialoguesFromScript(ctx.scriptText)
-        : []
+    const scriptGuidanceText = ctx.scriptText ?? undefined
+    const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
     const assemblyDump = formatAssemblyTranscriptDumpForPrompt(segments)
     const geminiOpts: AnalyzeSegmentsOptions = {}
     if (scriptGuidanceText) geminiOpts.scriptGuidanceText = scriptGuidanceText
@@ -1295,13 +1291,8 @@ export async function runMultipleClipsPipelineFromStorage(
     )
     const formattedMap = formatSegmentMapForPrompt(segmentsForGeminiPrompt)
     const ctx = await fetchJobGeminiContext(jobId)
-    const scriptGuidanceText = USE_MARKETING_SCRIPT_IN_PIPELINE
-      ? (ctx.scriptText ?? undefined)
-      : undefined
-    const scriptDialogues =
-      USE_MARKETING_SCRIPT_IN_PIPELINE && ctx.scriptText
-        ? extractQuotedDialoguesFromScript(ctx.scriptText)
-        : []
+    const scriptGuidanceText = ctx.scriptText ?? undefined
+    const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
     const assemblyDump = formatAssemblyTranscriptDumpForPrompt(allSegments)
     const normIntro = normalizeManualIntroClipIndices(
       ctx.manualIntroClipIndicesRaw,

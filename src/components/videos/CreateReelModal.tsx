@@ -1547,9 +1547,9 @@ export function CreateReelModal({
                 <div className="min-w-0 space-y-2">
                   <p className="text-sm font-semibold text-gray-900">Guion en PDF (opcional)</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    Si tienes un guion, súbelo como referencia para orden de ideas, ritmo y subtítulos. El sistema extrae
+                    Si tienes un guion, súbelo como referencia para el orden de ideas del Reel. El sistema extrae
                     automáticamente las frases entre comillas como lista de diálogos para alinearlas con la
-                    transcripción. La IA puede apartarse del PDF si el material en cámara pide otro enfoque.
+                    transcripción. Los subtítulos siempre salen de lo que se dice en el video.
                   </p>
                 </div>
               </div>
