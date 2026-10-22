@@ -14,6 +14,7 @@ import {
   HOOK_STYLES,
   rawGraphicSchema,
   teaserBeatSchema,
+  TYPEFACE_NAMES,
   type CreativePlan,
   type FocusBox,
 } from '../src/plan/schema'
@@ -33,6 +34,7 @@ export const directorPlanSchema = creativePlanSchema.extend({
   captionStyle: z.enum(CAPTION_STYLES),
   teaser: z.array(teaserBeatSchema),
   hookStyle: z.enum(HOOK_STYLES),
+  typeface: z.enum(TYPEFACE_NAMES),
 })
 export type DirectorPlan = z.infer<typeof directorPlanSchema>
 
@@ -75,11 +77,11 @@ export function semanticProblems(plan: DirectorPlan, clips: DirectorClip[]): str
     const inCut = plan.cuts.some((c) => c.clipId === g.clipId && g.atSec >= c.startSec - 0.3 && g.atSec <= c.endSec)
     if (!inCut) problems.push(`graphics[${i}] (${g.type}): atSec ${g.atSec} de ${g.clipId} no cae dentro de ningún corte elegido`)
   })
-  if (plan.teaser.length === 1 || plan.teaser.length > 4) problems.push(`teaser: usa 2–4 planos o ninguno (hay ${plan.teaser.length})`)
+  if (plan.teaser.length > 3) problems.push(`teaser: usa 1–3 planos o ninguno (hay ${plan.teaser.length})`)
   plan.teaser.forEach((b, i) => {
     const clip = byId.get(b.clipId)
     if (!clip) return problems.push(`teaser[${i}]: clipId "${b.clipId}" no existe`)
-    if (b.atSec > clip.durationSec - 0.45) problems.push(`teaser[${i}]: atSec ${b.atSec} está al final de ${b.clipId} (dura ${clip.durationSec.toFixed(2)} s)`)
+    if (b.atSec > clip.durationSec - 0.65) problems.push(`teaser[${i}]: atSec ${b.atSec} está al final de ${b.clipId} (dura ${clip.durationSec.toFixed(2)} s)`)
   })
   const cta = plan.graphics.filter((g) => g.type === 'cta_end')
   if (cta.length !== 1) problems.push(`debe haber exactamente un cta_end (hay ${cta.length})`)

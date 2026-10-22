@@ -53,10 +53,17 @@ export const ICONS = [
 export type IconName = (typeof ICONS)[number]
 
 /**
- * Entrada de cada toma. En modo cine: `whip` barrido con desenfoque, `zoom` acercamiento de impacto, `flash` destello
- * de luz cálida y `barrido` franja de color de marca que descubre la toma nueva. `glitch` solo en look social.
+ * Entrada de cada toma. En modo cine: `disolver` fundido suave con la toma anterior, `whip` barrido con desenfoque,
+ * `zoom` acercamiento de impacto, `flash` destello de luz cálida y `barrido` franja de color de marca que descubre la
+ * toma nueva. `glitch` solo en look social.
  */
-export const TRANSITIONS = ['corte', 'flash', 'zoom', 'whip', 'barrido', 'glitch'] as const
+export const TRANSITIONS = ['corte', 'disolver', 'flash', 'zoom', 'whip', 'barrido', 'glitch'] as const
+/**
+ * Juego tipográfico de los títulos (gancho, presentación 3D, cifras, cierre). El director lo cambia de un Reel a otro
+ * para que no se vean todos iguales (ver TYPEFACES en theme.ts).
+ */
+export const TYPEFACE_NAMES = ['clasica', 'potente', 'tecnica', 'deportiva', 'moderna', 'geometrica'] as const
+export type TypefaceName = (typeof TYPEFACE_NAMES)[number]
 /** Cómo entra el texto del gancho (lo elige el director según el vehículo y el tono). */
 export const HOOK_STYLES = ['enfoque', 'golpe', 'revelado', 'cruce'] as const
 export type HookStyle = (typeof HOOK_STYLES)[number]
@@ -154,9 +161,10 @@ export const creativePlanSchema = z.object({
   caption: z.string(),
   /** Opcional para leer planes viejos; al director se le exige (pipeline/director-plan.ts). */
   captionStyle: z.enum(CAPTION_STYLES).optional(),
-  /** 2–4 planos de 0.4 s que abren el Reel antes de la primera toma (vacío = sin teaser). */
+  /** 2–3 planos que se ven encima de la voz del primer corte, en el arranque (vacío = sin teaser). */
   teaser: z.array(teaserBeatSchema).optional(),
   hookStyle: z.enum(HOOK_STYLES).optional(),
+  typeface: z.enum(TYPEFACE_NAMES).optional(),
 })
 export type CreativePlan = z.infer<typeof creativePlanSchema>
 
@@ -171,7 +179,8 @@ export function validateGraphic(g: RawGraphic): string | null {
     case 'feature_list':
       return g.items && g.items.length >= 2 ? null : `${g.type} necesita al menos 2 items`
     case 'sticker':
-      return g.text.trim() && g.icon ? null : 'sticker necesita text e icon'
+      // Encuesta (2 opciones en "items") o cápsula con ícono.
+      return g.text.trim() && (g.icon || (g.items?.length ?? 0) >= 2) ? null : 'sticker necesita text e icon (o 2 opciones)'
     case 'brillo':
       return null
     default:

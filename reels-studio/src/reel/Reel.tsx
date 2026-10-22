@@ -10,14 +10,14 @@ import { SpecCounter } from '../graphics/SpecCounter'
 import { Sticker } from '../graphics/Sticker'
 import { OffroadCallout, OffroadCounter, OffroadCta, OffroadHook, OffroadList, OffroadTitle } from '../graphics/offroad/OffroadGraphics'
 import { CineCallout, CineCounter, CineCta, CineHook, CineList, CinePrice, CineSticker, CineTitle } from '../graphics/cine/CineGraphics'
-import { CineFrame } from '../graphics/cine/kit'
+import { CineFrame, TypefaceProvider } from '../graphics/cine/kit'
 import { Title3D } from '../graphics/Title3D'
 import { Brillo } from '../graphics/Brillo'
 import type { HookStyle } from '../plan/schema'
 import type { Brand, ReelLook, ReelProps, ReelTheme, TimelineGraphic } from '../plan/types'
 import { FONT_UI, PALETTES } from '../theme'
 import { Captions } from './Captions'
-import { BARRIDO_FRAMES, ClipLayer, resolveSrc } from './ClipLayer'
+import { BARRIDO_FRAMES, ClipLayer, DISOLVER_FRAMES, resolveSrc } from './ClipLayer'
 import { PaletteProvider } from './palette'
 
 /** Efectos discretos: acompañan, no tapan la voz del asesor. */
@@ -95,6 +95,43 @@ const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand; theme: ReelTheme; lo
   return null
 }
 
+/** Fundido de los planos del teaser: el primero ya está en el cuadro 0; el último se funde de vuelta a la toma. */
+const INSERT_FADE = 6
+
+const InsertLayer: React.FC<{
+  insert: NonNullable<ReelProps['inserts']>[number]
+  first: boolean
+  last: boolean
+  engine: ReelProps['videoEngine']
+  theme: ReelTheme
+  look: ReelLook
+}> = ({ insert, first, last, engine, theme, look }) => {
+  const frame = useCurrentFrame()
+  const d = insert.durationInFrames
+  // El último se funde de vuelta a la toma; los demás quedan enteros debajo del siguiente mientras entra.
+  const opacity = Math.min(
+    first ? 1 : interpolate(frame, [0, INSERT_FADE], [0, 1], { extrapolateRight: 'clamp' }),
+    last ? interpolate(frame, [d - INSERT_FADE, d], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) : 1
+  )
+  const cut = {
+    ...insert,
+    trimEndSec: insert.trimStartSec + d / 30,
+    role: 'gancho' as const,
+    transitionIn: 'corte' as const,
+    captionPlacement: 'abajo' as const,
+    zooms: [],
+    take: -1,
+    jump: 0,
+    punches: [],
+    energy: 3 as const,
+  }
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      <ClipLayer cut={cut} engine={engine} muted insert theme={theme} look={look} />
+    </AbsoluteFill>
+  )
+}
+
 export const Reel: React.FC<ReelProps> = (props) => {
   const frame = useCurrentFrame()
   const theme = props.theme ?? 'ksi'
@@ -108,26 +145,46 @@ export const Reel: React.FC<ReelProps> = (props) => {
 
   return (
     <PaletteProvider theme={theme}>
+    <TypefaceProvider typeface={props.typeface}>
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
       {props.cuts.map((cut, i) => {
         const prev = props.cuts[i - 1]
-        // Barrido de marca: debajo de la toma nueva se queda la última imagen de la anterior mientras pasa la franja.
-        const wipeUnder = prev && cut.transitionIn === 'barrido' && cut.jump === 0 && theme !== 'offroad'
+        // Barrido y fundido: debajo de la toma nueva se queda la última imagen de la anterior mientras dura la transición.
+        const underFrames =
+          !prev || cut.jump > 0
+            ? 0
+            : cut.transitionIn === 'barrido' && theme !== 'offroad'
+              ? BARRIDO_FRAMES
+              : cut.transitionIn === 'disolver' && (cine || theme === 'offroad')
+                ? DISOLVER_FRAMES
+                : 0
         return (
           <React.Fragment key={`cut-${i}`}>
-            {wipeUnder ? (
-              <Sequence from={cut.fromFrame} durationInFrames={Math.min(BARRIDO_FRAMES, cut.durationInFrames)} name="barrido: toma anterior">
+            {underFrames > 0 ? (
+              <Sequence from={cut.fromFrame} durationInFrames={Math.min(underFrames, cut.durationInFrames)} name={`${cut.transitionIn}: toma anterior`}>
                 <Freeze frame={prev.durationInFrames - 1}>
                   <ClipLayer cut={{ ...prev, transitionIn: 'corte', zooms: [], punches: [] }} engine={props.videoEngine} muted theme={theme} look={look} />
                 </Freeze>
               </Sequence>
             ) : null}
-            <Sequence from={cut.fromFrame} durationInFrames={cut.durationInFrames} name={`${cut.teaser ? 'teaser' : cut.role} · ${cut.clipId}`}>
-              <ClipLayer cut={cut} engine={props.videoEngine} muted={cut.teaser} theme={theme} look={look} />
+            <Sequence from={cut.fromFrame} durationInFrames={cut.durationInFrames} name={`${cut.role} · ${cut.clipId}`}>
+              <ClipLayer cut={cut} engine={props.videoEngine} theme={theme} look={look} />
             </Sequence>
           </React.Fragment>
         )
       })}
+      {/* Teaser: planos del auto encima de la voz del arranque (sin su audio); se funden entre sí y con la toma. */}
+      {/* Cada plano (menos el último) dura un poco más, para que el siguiente se funda encima de él y no del asesor. */}
+      {(props.inserts ?? []).map((ins, i, all) => (
+        <Sequence
+          key={`insert-${i}`}
+          from={ins.fromFrame}
+          durationInFrames={ins.durationInFrames + (i === all.length - 1 ? 0 : INSERT_FADE)}
+          name={`teaser · ${ins.clipId}`}
+        >
+          <InsertLayer insert={ins} first={i === 0} last={i === all.length - 1} engine={props.videoEngine} theme={theme} look={look} />
+        </Sequence>
+      ))}
       {props.tailFrames > 0 ? (
         <Sequence from={last.fromFrame + last.durationInFrames} durationInFrames={props.tailFrames} name="cola congelada">
           <Freeze frame={last.durationInFrames - 1}>
@@ -212,6 +269,7 @@ export const Reel: React.FC<ReelProps> = (props) => {
         />
       ) : null}
     </AbsoluteFill>
+    </TypefaceProvider>
     </PaletteProvider>
   )
 }

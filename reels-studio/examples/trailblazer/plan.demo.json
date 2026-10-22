@@ -17,7 +17,7 @@
       "startSec": 0,
       "endSec": 5.43,
       "role": "presentacion",
-      "transitionIn": "barrido",
+      "transitionIn": "disolver",
       "captionPlacement": "abajo",
       "reason": "Frente del vehículo mientras dice modelo y versión.",
       "energy": 3
@@ -27,7 +27,7 @@
       "startSec": 0,
       "endSec": 9.8,
       "role": "caracteristica",
-      "transitionIn": "whip",
+      "transitionIn": "flash",
       "captionPlacement": "abajo",
       "reason": "Los 3 pilares que importan en un SUV.",
       "energy": 2
@@ -47,7 +47,7 @@
       "startSec": 0.6,
       "endSec": 3.23,
       "role": "confianza",
-      "transitionIn": "flash",
+      "transitionIn": "disolver",
       "captionPlacement": "abajo",
       "reason": "Exterior lateral, respaldo de marca.",
       "energy": 1
@@ -67,7 +67,7 @@
       "startSec": 0,
       "endSec": 2.3,
       "role": "cierre",
-      "transitionIn": "zoom",
+      "transitionIn": "barrido",
       "captionPlacement": "abajo",
       "reason": "Llamado a comentar.",
       "energy": 2
@@ -86,7 +86,7 @@
     {
       "type": "title_3d",
       "clipId": "clip2",
-      "atSec": 0.05,
+      "atSec": 1.2,
       "durationSec": 2,
       "text": "Trailblazer",
       "subtext": "Chevrolet",
@@ -96,7 +96,7 @@
     {
       "type": "spec_chips",
       "clipId": "clip2",
-      "atSec": 2.05,
+      "atSec": 3.6,
       "durationSec": 3.3,
       "text": "",
       "items": [
@@ -166,22 +166,25 @@
       "reason": "Cierre: comenta la palabra clave."
     },
     {
-      "type": "sticker",
-      "clipId": "clip3",
-      "atSec": 7.6,
-      "durationSec": 2.2,
-      "text": "Guárdalo para tu *viaje*",
-      "icon": "guardar",
-      "placement": "arriba",
-      "reason": "Invita a guardar justo cuando habla de viajes largos."
-    },
-    {
       "type": "brillo",
       "clipId": "clip2",
       "atSec": 2.3,
       "durationSec": 1,
       "text": "",
       "reason": "Reflejo sobre la parrilla cuando el auto llena el cuadro en la presentación."
+    },
+    {
+      "type": "sticker",
+      "clipId": "clip1",
+      "atSec": 2.3,
+      "durationSec": 3.2,
+      "text": "¿Para qué lo *usarías*?",
+      "items": [
+        "Familia",
+        "Trabajo"
+      ],
+      "placement": "arriba",
+      "reason": "Encuesta de apertura"
     }
   ],
   "transcriptFixes": [
@@ -261,5 +264,6 @@
       "atSec": 2.4
     }
   ],
-  "hookStyle": "golpe"
+  "hookStyle": "revelado",
+  "typeface": "deportiva"
 }

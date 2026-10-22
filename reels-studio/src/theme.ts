@@ -35,6 +35,19 @@ void loadFont({ family: FONT_HEAVY, url: staticFile('fonts/ArchivoBlack-Regular.
 void loadFont({ family: FONT_SOCIAL, url: staticFile('fonts/Poppins-ExtraBold.woff2'), weight: '800' })
 void loadFont({ family: FONT_RACE, url: staticFile('fonts/Teko-Bold.woff2'), weight: '700' })
 
+/**
+ * Juegos tipográficos de los títulos: familia en pantalla, la misma en 3D (src/three) y un factor de tamaño (las
+ * anchas ocupan más). El director elige uno por Reel; ver TYPEFACE_NAMES en plan/schema.ts.
+ */
+export const TYPEFACES = {
+  clasica: { family: FONT_CONDENSED, font3d: 'bebas', scale: 1, weight: 400 },
+  potente: { family: FONT_DISPLAY, font3d: 'anton', scale: 0.86, weight: 400 },
+  tecnica: { family: FONT_RACE, font3d: 'teko', scale: 1.02, weight: 700 },
+  deportiva: { family: FONT_SPEED, font3d: 'russo', scale: 0.68, weight: 400 },
+  moderna: { family: FONT_HEAVY, font3d: 'archivo', scale: 0.66, weight: 400 },
+  geometrica: { family: FONT_UI, font3d: 'montserrat', scale: 0.68, weight: 900 },
+} as const
+
 /** Extrusión "3D" por capas de sombra: da volumen a texto HTML sin WebGL. */
 export function extrudedShadow(depth: number, color: string, angleDeg = 135): string {
   const rad = (angleDeg * Math.PI) / 180

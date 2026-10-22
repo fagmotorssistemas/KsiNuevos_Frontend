@@ -27,13 +27,20 @@ const PUNCH_OUT = 9
 /** Cine: golpes más finos y acercamiento continuo según la energía del tramo (1 calmado … 3 impacto). */
 const CINE_PUNCH: Record<Energy, number> = { 1: 0, 2: 0.035, 3: 0.06 }
 const CINE_DRIFT: Record<Energy, number> = { 1: 1.04, 2: 1.07, 3: 1.11 }
-/** Teaser: acercamiento rápido, como un adelanto de tráiler. */
-const TEASER_DRIFT = 1.16
+/** Teaser: acercamiento continuo marcado, como un adelanto de tráiler. */
+const TEASER_DRIFT = 1.12
 /** Transiciones que cada diseño permite (el resto entra con corte seco). */
-const CINE_TRANSITIONS = new Set(['corte', 'zoom', 'whip', 'flash', 'barrido'])
-const OFFROAD_TRANSITIONS = new Set(['corte', 'zoom', 'whip'])
-/** Barrido de marca: lo que tarda la franja en cruzar (la toma anterior se ve detrás, ver Reel.tsx). */
-export const BARRIDO_FRAMES = 10
+const CINE_TRANSITIONS = new Set(['corte', 'disolver', 'zoom', 'whip', 'flash', 'barrido'])
+const OFFROAD_TRANSITIONS = new Set(['corte', 'disolver', 'zoom', 'whip'])
+/**
+ * Duración de las transiciones de cine (cuadros a 30 cps): con calma, que se alcancen a ver. En el barrido y el
+ * fundido la toma anterior se queda detrás mientras dura (ver Reel.tsx).
+ */
+export const BARRIDO_FRAMES = 16
+export const DISOLVER_FRAMES = 14
+const ZOOM_FRAMES = 16
+const WHIP_FRAMES = 12
+const LEAK_FRAMES = 20
 
 function punchAt(frame: number, punches: number[], amount = PUNCH_SCALE): number {
   let bump = 0
@@ -52,7 +59,9 @@ export const ClipLayer: React.FC<{
   muted?: boolean
   theme?: ReelProps['theme']
   look?: ReelProps['look']
-}> = ({ cut, engine, muted, theme = 'ksi', look = 'social' }) => {
+  /** Plano del teaser encima de la voz: acercamiento más marcado. */
+  insert?: boolean
+}> = ({ cut, engine, muted, theme = 'ksi', look = 'social', insert = false }) => {
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
   const { accent } = usePalette()
@@ -74,24 +83,26 @@ export const ClipLayer: React.FC<{
     transform = `translate(${t.translateX}px, ${t.translateY}px) scale(${t.scale})`
   } else {
     // Movimiento de cámara continuo para que ninguna toma se sienta estática (más rápido en tramos de impacto).
-    const driftEnd = cut.teaser ? TEASER_DRIFT : cine ? (offroad ? Math.min(OFFROAD_DRIFT, CINE_DRIFT[energy]) : CINE_DRIFT[energy]) : sober ? OFFROAD_DRIFT : 1.05
+    const driftEnd = insert ? TEASER_DRIFT : cine ? (offroad ? Math.min(OFFROAD_DRIFT, CINE_DRIFT[energy]) : CINE_DRIFT[energy]) : sober ? OFFROAD_DRIFT : 1.05
     const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, driftEnd])
     // Transiciones cortas: el cambio se siente inmediato.
     const zoomIn =
       transitionIn === 'zoom'
-        ? interpolate(frame, [0, cine ? 9 : 8], [cine ? 1.24 : 1.18, 1], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
+        ? interpolate(frame, [0, cine ? ZOOM_FRAMES : 8], [cine ? 1.2 : 1.18, 1], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 1
     const whipX =
       transitionIn === 'whip'
-        ? interpolate(frame, [0, cine ? 7 : 6], [width * (cine ? 0.24 : 0.18), 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
+        ? interpolate(frame, [0, cine ? WHIP_FRAMES : 6], [width * (cine ? 0.2 : 0.18), 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 0
     const jump = cut.jump % 2 === 1 ? (sober ? OFFROAD_JUMP_SCALE : JUMP_SCALE) : 1
     const punch = cine ? punchAt(frame, cut.punches ?? [], CINE_PUNCH[energy] * (offroad ? 0.6 : 1)) : sober ? 1 : punchAt(frame, cut.punches ?? [])
     transform = `translateX(${whipX}px) scale(${drift * zoomIn * jump * punch})`
   }
-  const whipBlur = transitionIn === 'whip' ? interpolate(frame, [0, cine ? 7 : 6], [cine ? 16 : 10, 0], { extrapolateRight: 'clamp' }) : 0
-  // Zoom de impacto en cine: entra un poco desenfocado, como un cambio de foco rápido.
-  const zoomBlur = cine && transitionIn === 'zoom' ? interpolate(frame, [0, 7], [8, 0], { extrapolateRight: 'clamp' }) : 0
+  const whipBlur = transitionIn === 'whip' ? interpolate(frame, [0, cine ? WHIP_FRAMES : 6], [cine ? 12 : 10, 0], { extrapolateRight: 'clamp' }) : 0
+  // Zoom de impacto en cine: entra un poco desenfocado, como un cambio de foco.
+  const zoomBlur = cine && transitionIn === 'zoom' ? interpolate(frame, [0, ZOOM_FRAMES * 0.75], [7, 0], { extrapolateRight: 'clamp' }) : 0
+  // Fundido: la toma nueva aparece sobre la anterior.
+  const dissolve = transitionIn === 'disolver' ? interpolate(frame, [0, DISOLVER_FRAMES], [0, 1], { extrapolateRight: 'clamp', easing: Easing.inOut(Easing.quad) }) : 1
   const glitch = transitionIn === 'glitch' && frame < 4
   // Barrido de marca: la toma nueva aparece detrás de una franja diagonal del color de acento.
   const wipe = transitionIn === 'barrido' ? interpolate(frame, [0, BARRIDO_FRAMES], [0, 1], { extrapolateRight: 'clamp', easing: Easing.inOut(Easing.cubic) }) : 1
@@ -99,7 +110,7 @@ export const ClipLayer: React.FC<{
   const wipeClip = wipe < 1 ? `polygon(0 0, ${(wipeEdge + 0.25) * 100}% 0, ${wipeEdge * 100}% 100%, 0 100%)` : undefined
 
   return (
-    <AbsoluteFill style={{ overflow: 'hidden' }}>
+    <AbsoluteFill style={{ overflow: 'hidden', opacity: dissolve }}>
     <AbsoluteFill style={{ backgroundColor: '#000', overflow: 'hidden', clipPath: wipeClip }}>
       <AbsoluteFill
         style={{
@@ -161,7 +172,7 @@ export const ClipLayer: React.FC<{
         />
       ) : null}
       {/* Cine: destello de luz cálida que cruza la pantalla (light leak), no un flash blanco plano. */}
-      {transitionIn === 'flash' && cine && frame < 12 ? <LightLeak frame={frame} width={width} /> : null}
+      {transitionIn === 'flash' && cine && frame < LEAK_FRAMES ? <LightLeak frame={frame} width={width} /> : null}
     </AbsoluteFill>
       {wipeClip ? <WipeStripe edge={wipeEdge} color={accent} /> : null}
     </AbsoluteFill>
@@ -170,9 +181,9 @@ export const ClipLayer: React.FC<{
 
 /** Fuga de luz: un resplandor naranja/blanco que entra por un lado y se desvanece. */
 const LightLeak: React.FC<{ frame: number; width: number }> = ({ frame, width }) => {
-  const t = frame / 12
+  const t = frame / LEAK_FRAMES
   const x = interpolate(t, [0, 1], [-0.2, 0.9]) * width
-  const opacity = interpolate(frame, [0, 2, 12], [0.95, 0.85, 0], { extrapolateRight: 'clamp' })
+  const opacity = interpolate(frame, [0, 4, LEAK_FRAMES], [0.9, 0.8, 0], { extrapolateRight: 'clamp' })
   return (
     <AbsoluteFill style={{ mixBlendMode: 'screen', opacity }}>
       <AbsoluteFill style={{ background: `radial-gradient(ellipse 55% 75% at ${x}px 45%, rgba(255,250,240,0.95) 0%, rgba(255,170,80,0.65) 35%, rgba(255,90,30,0.25) 60%, rgba(0,0,0,0) 80%)` }} />

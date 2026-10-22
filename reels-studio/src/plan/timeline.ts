@@ -8,7 +8,7 @@
  * lo mismo, y calcular dónde queda en pantalla lo que el director señaló en el cuadro.
  */
 import { chooseZoomTarget } from '../reel/zoom'
-import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, HookStyle, RawGraphic, TranscriptFix } from './schema'
+import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, HookStyle, RawGraphic, TranscriptFix, TypefaceName } from './schema'
 import { validateGraphic } from './schema'
 import type {
   Brand,
@@ -23,6 +23,7 @@ import type {
   SfxCue,
   TimelineCut,
   TimelineGraphic,
+  TimelineInsert,
   Word,
 } from './types'
 
@@ -114,6 +115,9 @@ function minDurationSec(g: Pick<RawGraphic, 'type' | 'items'>): number {
 /** Respiro entre un gráfico y el siguiente. */
 const GRAPHIC_GAP_SEC = 0.25
 const STICKER_MAX_SEC = 2.6
+/** Encuesta: necesita más tiempo (se lee, se "toca" una opción y se llenan las barras). */
+const POLL_MIN_SEC = 3.2
+const POLL_MAX_SEC = 4
 /** Cuánto se puede adelantar o atrasar un sticker para encontrar un hueco sin gráficos. */
 const STICKER_MAX_EARLY_SEC = 1.5
 const STICKER_MAX_SHIFT_SEC = 3
@@ -129,9 +133,9 @@ const MAX_EDGE_SILENCE_SEC = 1
 /** Golpes de cámara: separación mínima entre dos (cuadros). */
 const PUNCH_MIN_GAP_FRAMES = 12
 
-/** Teaser de apertura: cada plano dura esto (rápido, como un adelanto) y hay como máximo estos planos. */
-const TEASER_BEAT_SEC = 0.42
-const MAX_TEASER_BEATS = 4
+/** Teaser: cada plano dura esto encima de la voz del arranque (se funde con el siguiente) y hay como máximo estos. */
+const INSERT_SEC = 0.6
+const MAX_INSERTS = 3
 /** Brillo sobre el auto: el reflejo cruza la pantalla en este tiempo; máximo estos por Reel. */
 const BRILLO_SEC = 1
 const MAX_BRILLOS = 2
@@ -386,46 +390,10 @@ export function buildReelProps(
 
   const cuts: TimelineCut[] = []
   let cursor = 0
-  // Teaser: 2–4 instantes muy visuales que se adelantan al segundo 0 (sin voz), con el gancho encima.
-  const beatFrames = Math.round(TEASER_BEAT_SEC * fps)
-  const teaserBeats = (plan.teaser ?? [])
-    .map((b) => ({ clip: clipById.get(b.clipId), atSec: b.atSec }))
-    .filter((b): b is { clip: ClipSource; atSec: number } => Boolean(b.clip) && b.clip!.durationSec >= TEASER_BEAT_SEC + 0.1)
-    .slice(0, MAX_TEASER_BEATS)
-  if (teaserBeats.length >= 2) {
-    teaserBeats.forEach(({ clip, atSec }, i) => {
-      const s = Math.min(Math.max(0, atSec), clip.durationSec - TEASER_BEAT_SEC - 0.05)
-      cuts.push({
-        clipId: clip.id,
-        src: clip.src,
-        srcWidth: clip.width,
-        srcHeight: clip.height,
-        fromFrame: cursor,
-        durationInFrames: beatFrames,
-        trimStartSec: s,
-        trimEndSec: s + beatFrames / fps,
-        role: 'gancho',
-        transitionIn: i === 0 ? 'zoom' : 'flash',
-        captionPlacement: 'abajo',
-        zooms: [],
-        take: -1,
-        jump: 0,
-        punches: [],
-        energy: 3,
-        teaser: true,
-      })
-      cursor += beatFrames
-    })
-  } else if (plan.teaser?.length) {
-    warnings.push('Teaser ignorado: hacen falta al menos 2 planos válidos')
-  }
-  const teaserFrames = cursor
-  const teaserCount = cuts.length
   const clampEnergy = (e: number | undefined): Energy => (e === 1 || e === 3 ? e : 2)
   takes.forEach(({ clip, s, e, cut }, take) => {
     removeSilences(s, e, fixedWords.get(clip.id) ?? []).forEach(([ps, pe], jump) => {
       const durationInFrames = Math.round((pe - ps) * fps)
-      const first = cuts.length > teaserCount ? null : teaserCount > 0 ? 'afterTeaser' : 'opening'
       cuts.push({
         clipId: clip.id,
         src: clip.src,
@@ -436,8 +404,8 @@ export function buildReelProps(
         trimStartSec: ps,
         trimEndSec: pe,
         role: cut.role,
-        // El Reel abre con golpe (o con destello al salir del teaser); los saltos dentro de una toma son cortes secos.
-        transitionIn: first === 'opening' ? 'zoom' : first === 'afterTeaser' ? 'flash' : jump > 0 ? 'corte' : cut.transitionIn,
+        // El Reel abre con golpe; los saltos dentro de una toma son cortes secos.
+        transitionIn: cuts.length === 0 ? 'zoom' : jump > 0 ? 'corte' : cut.transitionIn,
         captionPlacement: cut.captionPlacement,
         zooms: [],
         take,
@@ -448,7 +416,27 @@ export function buildReelProps(
       cursor += durationInFrames
     })
   })
-  if (cuts.length === teaserCount) throw new Error('El plan no dejó ningún corte utilizable')
+  if (cuts.length === 0) throw new Error('El plan no dejó ningún corte utilizable')
+
+  // Teaser: 1–3 instantes muy visuales encima de la voz del arranque (la voz del asesor suena desde el cuadro 0).
+  const insertFrames = Math.round(INSERT_SEC * fps)
+  const inserts: TimelineInsert[] = []
+  for (const b of (plan.teaser ?? []).slice(0, MAX_INSERTS)) {
+    const clip = clipById.get(b.clipId)
+    if (!clip || clip.durationSec < INSERT_SEC + 0.1) {
+      warnings.push(`Plano del teaser ignorado: ${b.clipId}@${b.atSec}`)
+      continue
+    }
+    inserts.push({
+      clipId: clip.id,
+      src: clip.src,
+      srcWidth: clip.width,
+      srcHeight: clip.height,
+      fromFrame: inserts.length * insertFrames,
+      durationInFrames: insertFrames,
+      trimStartSec: Math.min(Math.max(0, b.atSec), clip.durationSec - INSERT_SEC - 0.05),
+    })
+  }
   const cutsEnd = cursor
   const takeEnd = (take: number) =>
     Math.max(...cuts.filter((c) => c.take === take).map((c) => c.fromFrame + c.durationInFrames))
@@ -456,7 +444,7 @@ export function buildReelProps(
   const sourceToFrame = (clipId: string, sec: number): { frame: number; cut: TimelineCut } | null => {
     const tolerance = 0.35
     for (const c of cuts) {
-      if (c.teaser || c.clipId !== clipId) continue
+      if (c.clipId !== clipId) continue
       if (sec >= c.trimStartSec - tolerance && sec <= c.trimEndSec + tolerance) {
         const clamped = Math.min(Math.max(sec, c.trimStartSec), c.trimEndSec)
         return { frame: c.fromFrame + Math.round((clamped - c.trimStartSec) * fps), cut: c }
@@ -558,7 +546,10 @@ export function buildReelProps(
   let stickerFree = 0
   for (const { g, fromFrame: rawFrom } of stickerLane) {
     let fromFrame = Math.max(rawFrom - Math.round(STICKER_MAX_EARLY_SEC * fps), stickerFree, 0)
-    const durationInFrames = Math.round(Math.min(STICKER_MAX_SEC, Math.max(g.durationSec, minDur(g))) * fps)
+    const poll = (g.items?.length ?? 0) >= 2
+    const durationInFrames = Math.round(
+      (poll ? Math.min(POLL_MAX_SEC, Math.max(g.durationSec, POLL_MIN_SEC)) : Math.min(STICKER_MAX_SEC, Math.max(g.durationSec, minDur(g)))) * fps
+    )
     const gap = Math.round(GRAPHIC_GAP_SEC * fps)
     for (let moved = true; moved; ) {
       moved = false
@@ -612,7 +603,6 @@ export function buildReelProps(
   const alreadyShown = (f: number, token: string) => onScreen.some((g) => f >= g.from && f < g.to && g.tokens.has(token))
   const capWords: PendingWord[] = []
   for (const c of cuts) {
-    if (c.teaser) continue
     for (const w of fixedWords.get(c.clipId) ?? []) {
       const ws = w.start / 1000
       const we = w.end / 1000
@@ -665,7 +655,7 @@ export function buildReelProps(
   for (const f of punchFrames) {
     if (f - lastPunch < PUNCH_MIN_GAP_FRAMES || zoomedAt(f)) continue
     const c = cuts.find((x) => f >= x.fromFrame && f < x.fromFrame + x.durationInFrames)
-    if (!c || c.teaser || c.energy < minEnergy) continue
+    if (!c || c.energy < minEnergy) continue
     c.punches.push(f - c.fromFrame)
     lastPunch = f
   }
@@ -677,13 +667,10 @@ export function buildReelProps(
     sfx.push({ frame, kind })
   }
   for (const g of graphics) pushSfx(g.fromFrame, (sober ? SFX_OFFROAD : SFX_BY_TYPE)[g.type])
-  // Teaser: un barrido por plano y un golpe cuando entra la voz.
-  for (const c of cuts) if (c.teaser) pushSfx(c.fromFrame, 'whoosh')
-  if (teaserFrames > 0) pushSfx(teaserFrames, 'hit')
   // Transiciones entre tomas (no en los saltos por silencio): barrido sonoro en los barridos; golpe en los
   // zooms de los tramos de impacto. En look social, también en los destellos.
   for (const c of cuts) {
-    if (c.teaser || c.jump > 0) continue
+    if (c.jump > 0) continue
     if (c.transitionIn === 'whip' || c.transitionIn === 'barrido' || (!sober && c.transitionIn === 'flash')) pushSfx(c.fromFrame, 'whoosh')
     else if (c.transitionIn === 'zoom' && c.energy === 3 && c.fromFrame > 0) pushSfx(c.fromFrame, 'hit')
   }
@@ -696,11 +683,13 @@ export function buildReelProps(
       height,
       durationInFrames,
       cuts,
+      inserts,
       tailFrames,
       graphics,
       captions,
       captionStyle,
       hookStyle: plan.hookStyle ?? ('enfoque' satisfies HookStyle),
+      typeface: plan.typeface ?? ((theme === 'offroad' ? 'potente' : 'clasica') satisfies TypefaceName),
       theme,
       look,
       sfx,

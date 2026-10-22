@@ -5,18 +5,28 @@
  */
 import React from 'react'
 import { AbsoluteFill, Easing, Img, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion'
+import type { TypefaceName } from '../../plan/schema'
 import type { ReelTheme } from '../../plan/types'
-import { FONT_CONDENSED, FONT_DISPLAY, FONT_UI } from '../../theme'
+import { FONT_UI, TYPEFACES } from '../../theme'
 
 /** Alto de cada franja negra (arriba y abajo), como fracción del alto del cuadro. */
 export const LETTERBOX = 0.075
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const
 
-/** Tipografía por diseño: general con letra alta y elegante; camionetas con letra más gruesa. */
-export const CINE_TYPE: Record<ReelTheme, { display: string; displayScale: number; label: string }> = {
-  ksi: { display: FONT_CONDENSED, displayScale: 1, label: FONT_UI },
-  offroad: { display: FONT_DISPLAY, displayScale: 0.86, label: FONT_UI },
+/** Juego tipográfico del Reel (lo elige el director; ver TYPEFACES en theme.ts). */
+const TypefaceContext = React.createContext<TypefaceName | null>(null)
+export const TypefaceProvider: React.FC<{ typeface?: TypefaceName; children: React.ReactNode }> = ({ typeface, children }) => (
+  <TypefaceContext.Provider value={typeface ?? null}>{children}</TypefaceContext.Provider>
+)
+
+/** Tipografía de los títulos: la del Reel, o la de siempre del diseño (general alta y elegante; camionetas gruesa). */
+export function useCineType(theme: ReelTheme) {
+  const chosen = React.useContext(TypefaceContext)
+  const t = TYPEFACES[chosen ?? (theme === 'offroad' ? 'potente' : 'clasica')]
+  return { display: t.family, displayScale: t.scale, font3d: t.font3d, label: FONT_UI }
 }
+
+const WEIGHT_BY_FAMILY: Record<string, number> = Object.fromEntries(Object.values(TYPEFACES).map((t) => [t.family, t.weight]))
 
 /** 0 → 1 en `dur` cuadros, frenando al final (sin pasarse). */
 export function ease(frame: number, delay: number, dur = 14): number {
@@ -75,6 +85,7 @@ export const CineText: React.FC<{ text: string; size: number; family: string; wo
     style={{
       display: 'inline-block',
       fontFamily: family,
+      fontWeight: WEIGHT_BY_FAMILY[family] ?? 400,
       fontSize: size,
       lineHeight: 0.92,
       letterSpacing: `${spacing}em`,

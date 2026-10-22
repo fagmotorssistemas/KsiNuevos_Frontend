@@ -12,7 +12,8 @@ import { formatSpecNumber, FONT_UI } from '../../theme'
 import { clamp, splitEmphasis, useEnterExit } from '../anim'
 import { Icon } from '../Icons'
 import { TreadBackground } from '../offroad/kit'
-import { AccentLine, CINE_TYPE, CineCorners, CineLabel, CineText, ease, focusIn, LETTERBOX } from './kit'
+import { Chrome3D, enter3d, Particles } from './Cine3D'
+import { AccentLine, CineCorners, CineLabel, CineText, ease, focusIn, LETTERBOX, useCineType } from './kit'
 
 type Props = { g: TimelineGraphic; theme: ReelTheme }
 
@@ -72,7 +73,7 @@ function slamShake(frame: number, starts: number[]): string {
 export const CineHook: React.FC<Props & { style?: HookStyle }> = ({ g, theme, style = 'enfoque' }) => {
   const { frame, width, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
-  const type = CINE_TYPE[theme]
+  const type = useCineType(theme)
   const words = splitEmphasis(g.text)
   const sub = g.subtext?.trim()
   // En camionetas el "subtext" es un adjetivo de una palabra ("IMPONENTE"): va grande, debajo.
@@ -88,6 +89,7 @@ export const CineHook: React.FC<Props & { style?: HookStyle }> = ({ g, theme, st
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
       <AbsoluteFill style={{ background: 'radial-gradient(ellipse 80% 45% at 50% 42%, rgba(0,0,0,0.5), rgba(0,0,0,0) 75%)' }} />
+      <Particles seed={g.id} strength={0.55} warm={theme === 'offroad'} />
       <div
         style={{
           position: 'absolute',
@@ -139,33 +141,33 @@ export const CineHook: React.FC<Props & { style?: HookStyle }> = ({ g, theme, st
   )
 }
 
-/** Presentación tipo título de película: marca espaciada, modelo enorme y versión/año con línea de acento. */
+/**
+ * Presentación: el modelo en letras de cromo 3D que llegan desde el fondo, giran despacio y reflejan una luz que las
+ * cruza; marca espaciada encima, versión/año entre líneas de acento debajo, y partículas de luz flotando.
+ */
 export const CineTitle: React.FC<Props> = ({ g, theme }) => {
   const { frame, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
-  const type = CINE_TYPE[theme]
-  const model = g.text
-  const size = Math.round((model.length <= 6 ? 220 : model.length <= 9 ? 180 : model.length <= 12 ? 140 : 112) * type.displayScale)
+  const type = useCineType(theme)
+  const titleY = height * 0.64
 
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
-      <AbsoluteFill style={{ background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.25) 32%, rgba(0,0,0,0) 50%)' }} />
-      <div style={{ position: 'absolute', left: 80, right: 80, bottom: height - safeBottom(height) + 90, display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {g.subtext ? (
-          <div style={focusIn(ease(frame, 0, 14), { blur: 6, scale: 1 })}>
-            <CineLabel text={g.subtext} />
-          </div>
-        ) : null}
-        <div style={{ transformOrigin: 'left bottom', ...focusIn(ease(frame, 4, 18), { scale: 1.06 }) }}>
-          <CineText text={model} size={size} family={type.display} worn={theme === 'offroad'} />
+      <AbsoluteFill style={{ background: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.35) 38%, rgba(0,0,0,0) 56%)' }} />
+      <Particles seed={g.id} strength={0.85} warm={theme === 'offroad'} />
+      {g.subtext ? (
+        <div style={{ position: 'absolute', top: titleY - 200, left: 0, right: 0, display: 'flex', justifyContent: 'center', ...focusIn(ease(frame, 6, 14), { blur: 6, scale: 1 }) }}>
+          <CineLabel text={g.subtext} size={38} spacing={0.55} />
         </div>
-        {g.badge ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 22, marginTop: 6, opacity: ease(frame, 12, 12) }}>
-            <AccentLine t={ease(frame, 12, 14)} width={110} color={accent} />
-            <CineLabel text={g.badge} size={40} color={accent} spacing={0.3} />
-          </div>
-        ) : null}
-      </div>
+      ) : null}
+      <Chrome3D text={g.text} font={type.font3d} theme={theme} y={titleY} enter={enter3d(frame, 0, 24)} exit={exit} />
+      {g.badge ? (
+        <div style={{ position: 'absolute', top: titleY + 140, left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22, opacity: ease(frame, 16, 12) }}>
+          <AccentLine t={ease(frame, 16, 14)} width={90} color={accent} align="right" />
+          <CineLabel text={g.badge} size={40} color={accent} spacing={0.3} />
+          <AccentLine t={ease(frame, 16, 14)} width={90} color={accent} align="left" />
+        </div>
+      ) : null}
     </AbsoluteFill>
   )
 }
@@ -185,7 +187,7 @@ function gaugeMax(value: number): number {
 const CineGauge: React.FC<Props> = ({ g, theme }) => {
   const { frame, fps, width, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
-  const type = CINE_TYPE[theme]
+  const type = useCineType(theme)
   const value = g.value ?? 0
   const max = gaugeMax(value)
   const decimals = Number.isInteger(value) ? 0 : 1
@@ -257,7 +259,7 @@ export const CineCounter: React.FC<Props> = ({ g, theme }) => {
 const CineNumber: React.FC<Props> = ({ g, theme }) => {
   const { frame, fps, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
-  const type = CINE_TYPE[theme]
+  const type = useCineType(theme)
   const value = g.value ?? 0
   const decimals = Number.isInteger(value) ? 0 : 1
   const count = interpolate(frame, [2, 2 + Math.round(fps * 0.7)], [0, value], { ...clamp, easing: Easing.out(Easing.cubic) })
@@ -290,9 +292,12 @@ const CineNumber: React.FC<Props> = ({ g, theme }) => {
             <CineLabel text={g.text} />
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 18, transformOrigin: 'left center', ...focusIn(ease(frame, 2, 16), { scale: 1.04 }) }}>
-          <CineText text={number} size={size} family={type.display} worn={theme === 'offroad'} />
-          {shortUnit ? <CineText text={shortUnit} size={Math.round(size * 0.42)} family={type.display} color={accent} /> : null}
+        {/* Profundidad: la cifra entra girada en perspectiva y sigue moviéndose apenas. */}
+        <div style={{ transformOrigin: 'left center', transform: `perspective(1100px) rotateY(${(-26 * (1 - ease(frame, 2, 20)) - 7 + Math.sin(frame / 40) * 3).toFixed(2)}deg)` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 18, transformOrigin: 'left center', ...focusIn(ease(frame, 2, 16), { scale: 1.04 }) }}>
+            <CineText text={number} size={size} family={type.display} worn={theme === 'offroad'} />
+            {shortUnit ? <CineText text={shortUnit} size={Math.round(size * 0.42)} family={type.display} color={accent} /> : null}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 22, opacity: ease(frame, 12, 12) }}>
           <AccentLine t={ease(frame, 12, 14)} width={110} color={accent} />
@@ -333,6 +338,9 @@ export const CineCallout: React.FC<Props> = ({ g, theme }) => {
             backdropFilter: 'blur(8px)',
             maxWidth: width - 140,
             ...focusIn(ease(frame, 8, 14), { blur: 8, scale: 1.02 }),
+            // Tarjeta con profundidad: entra volteándose y queda flotando con un leve vaivén.
+            transform: `perspective(1000px) rotateX(${((above ? -1 : 1) * 40 * (1 - ease(frame, 8, 16))).toFixed(2)}deg) rotateY(${(Math.sin(frame / 36) * 4).toFixed(2)}deg) scale(${(1 + 0.02 * (1 - ease(frame, 8, 14))).toFixed(3)})`,
+            boxShadow: '0 24px 60px rgba(0,0,0,0.45)',
           }}
         >
           <div style={{ width: 8, background: accent }} />
@@ -381,7 +389,17 @@ export const CineList: React.FC<Props> = ({ g }) => {
           </div>
         ) : null}
         {items.map((item, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 24, ...focusIn(ease(frame, 6 + i * per, 12), { blur: 6, scale: 1 }) }}>
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 24,
+              ...focusIn(ease(frame, 6 + i * per, 12), { blur: 6, scale: 1 }),
+              transformOrigin: 'left center',
+              transform: `perspective(900px) rotateX(${(70 * (1 - ease(frame, 6 + i * per, 14))).toFixed(2)}deg)`,
+            }}
+          >
             <span style={{ fontFamily: FONT_UI, fontWeight: 800, fontSize: 30, letterSpacing: '0.1em', color: accent }}>{String(i + 1).padStart(2, '0')}</span>
             <span style={{ fontFamily: FONT_UI, fontWeight: 800, fontSize: 54, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#fff', textShadow: '0 2px 14px rgba(0,0,0,0.6)' }}>{item}</span>
           </div>
@@ -395,7 +413,7 @@ export const CineList: React.FC<Props> = ({ g }) => {
 export const CinePrice: React.FC<Props> = ({ g, theme }) => {
   const { frame, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
-  const type = CINE_TYPE[theme]
+  const type = useCineType(theme)
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
       <AbsoluteFill style={{ background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 45%)' }} />
@@ -418,13 +436,13 @@ export const CinePrice: React.FC<Props> = ({ g, theme }) => {
   )
 }
 
-/** Cierre tipo placa final: "COMENTA" espaciado, la palabra clave enorme, la promesa y el logo en blanco. */
+/** Cierre tipo placa final: "COMENTA" espaciado, la palabra clave en cromo 3D, la promesa y el logo en blanco. */
 export const CineCta: React.FC<Props & { brand: Brand }> = ({ g, theme, brand }) => {
   const { frame, width, height } = useEnterExit(1)
   const { accent } = usePalette()
-  const type = CINE_TYPE[theme]
+  const type = useCineType(theme)
   const keyword = g.text.replace(/^comenta\s+/i, '').replace(/["“”']/g, '').toUpperCase()
-  const size = Math.round((keyword.length <= 8 ? 200 : keyword.length <= 12 ? 160 : keyword.length <= 18 ? 120 : 96) * type.displayScale)
+  const y0 = height * 0.42
 
   return (
     <AbsoluteFill style={{ opacity: ease(frame, 0, 10) }}>
@@ -437,32 +455,93 @@ export const CineCta: React.FC<Props & { brand: Brand }> = ({ g, theme, brand })
       ) : (
         <AbsoluteFill style={{ background: 'radial-gradient(ellipse 90% 70% at 50% 45%, #1A1A1D 0%, #050506 100%)' }} />
       )}
-      <AbsoluteFill style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 30, padding: '0 60px', textAlign: 'center' }}>
-        <div style={focusIn(ease(frame, 4, 14), { blur: 6, scale: 1 })}>
-          <CineLabel text="Comenta" size={40} spacing={0.6} />
-        </div>
-        <div style={focusIn(ease(frame, 8, 18), { scale: 1.06 })}>
-          <CineText text={keyword} size={size} family={type.display} worn={theme === 'offroad'} />
-        </div>
+      <Particles seed={g.id} strength={0.7} warm={theme === 'offroad'} />
+      <div style={{ position: 'absolute', top: y0 - 210, left: 0, right: 0, display: 'flex', justifyContent: 'center', ...focusIn(ease(frame, 4, 14), { blur: 6, scale: 1 }) }}>
+        <CineLabel text="Comenta" size={40} spacing={0.6} />
+      </div>
+      <Chrome3D text={keyword} font={type.font3d} theme={theme} y={y0} enter={enter3d(frame, 6, 26)} exit={0} size={1.35} />
+      <div style={{ position: 'absolute', top: y0 + 150, left: 60, right: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30, textAlign: 'center' }}>
         <AccentLine t={ease(frame, 16, 14)} width={200} color={accent} align="center" />
         {g.subtext ? (
           <div style={focusIn(ease(frame, 20, 14), { blur: 6, scale: 1 })}>
             <span style={{ fontFamily: FONT_UI, fontWeight: 600, fontSize: 36, color: 'rgba(255,255,255,0.85)' }}>{g.subtext}</span>
           </div>
         ) : null}
-        <div style={{ marginTop: 60, opacity: ease(frame, 26, 14) }}>
+        <div style={{ marginTop: 50, opacity: ease(frame, 26, 14) }}>
           <Img src={staticFile(brand.logoSrc)} style={{ width: 300, display: 'block', filter: 'brightness(0) invert(1)' }} />
         </div>
         <div style={{ opacity: ease(frame, 30, 14) }}>
           <CineLabel text="Cuenca · Ecuador" size={26} spacing={0.5} color="rgba(255,255,255,0.6)" />
         </div>
-      </AbsoluteFill>
+      </div>
     </AbsoluteFill>
   )
 }
 
-/** Invitación a interactuar, discreta: cápsula translúcida con ícono fino; aparece y se va con un fundido. */
-export const CineSticker: React.FC<Props> = ({ g }) => {
+/**
+ * Encuesta: la pregunta y dos opciones como en una historia de Instagram. A mitad del gráfico se "toca" una opción
+ * (anillo que se expande) y las barras se llenan con el resultado: invita a votar en los comentarios.
+ */
+const CinePoll: React.FC<Props> = ({ g }) => {
+  const { frame, durationInFrames, height, exit } = useEnterExit(8)
+  const { accent } = usePalette()
+  const [a, b] = g.items ?? []
+  const tapAt = Math.round(durationInFrames * 0.42)
+  const voted = ease(frame, tapAt, 14)
+  const ring = interpolate(frame - tapAt, [0, 12], [0, 1], clamp)
+  const shares = [64, 36]
+  const top = g.placement === 'abajo' ? height * 0.52 : safeTop(height) + 30
+
+  return (
+    <AbsoluteFill style={{ opacity: 1 - exit }}>
+      <div style={{ position: 'absolute', top, left: 120, right: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, ...focusIn(ease(frame, 0, 12), { blur: 6, scale: 1.03 }) }}>
+        <div style={{ padding: '18px 30px', borderRadius: 22, background: 'rgba(10,10,12,0.62)', backdropFilter: 'blur(10px)', textAlign: 'center' }}>
+          <span style={{ fontFamily: FONT_UI, fontWeight: 800, fontSize: 46, color: '#fff', lineHeight: 1.15 }}>
+            {splitEmphasis(g.text).map(({ word, strong }, i) => (
+              <span key={i} style={{ color: strong ? accent : '#fff' }}>
+                {i > 0 ? ' ' : ''}
+                {word}
+              </span>
+            ))}
+          </span>
+        </div>
+        {[a, b].map((option, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: 86,
+              borderRadius: 999,
+              overflow: 'hidden',
+              background: 'rgba(255,255,255,0.92)',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+              transform: `perspective(900px) rotateX(${(60 * (1 - ease(frame, 4 + i * 4, 12))).toFixed(2)}deg)`,
+              opacity: ease(frame, 4 + i * 4, 10),
+            }}
+          >
+            <div style={{ position: 'absolute', inset: 0, width: `${shares[i] * voted}%`, background: i === 0 ? accent : 'rgba(0,0,0,0.18)' }} />
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 34px' }}>
+              <span style={{ fontFamily: FONT_UI, fontWeight: 900, fontSize: 36, color: i === 0 && voted > 0.5 ? '#fff' : '#111', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{option}</span>
+              <span style={{ fontFamily: FONT_UI, fontWeight: 900, fontSize: 32, color: '#111', opacity: voted }}>{Math.round(shares[i] * voted)}%</span>
+            </div>
+            {i === 0 && ring > 0 && ring < 1 ? (
+              <div style={{ position: 'absolute', left: '22%', top: '50%', width: 60, height: 60, marginLeft: -30, marginTop: -30, borderRadius: '50%', border: '4px solid #fff', transform: `scale(${1 + ring * 2.2})`, opacity: 1 - ring }} />
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </AbsoluteFill>
+  )
+}
+
+/** Invitación a interactuar: encuesta si trae dos opciones; si no, cápsula translúcida con ícono fino. */
+export const CineSticker: React.FC<Props> = ({ g, theme }) => {
+  if ((g.items?.length ?? 0) >= 2) return <CinePoll g={g} theme={theme} />
+  return <CinePill g={g} theme={theme} />
+}
+
+const CinePill: React.FC<Props> = ({ g }) => {
   const { frame, height, exit } = useEnterExit(8)
   const { accent } = usePalette()
   const top = g.placement === 'abajo' ? height * 0.56 : safeTop(height) + 10

@@ -9,11 +9,19 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js'
 import { Font, type FontData } from 'three/addons/loaders/FontLoader.js'
 import antonData from './anton.typeface.json'
+import archivoData from './archivo.typeface.json'
+import bebasData from './bebas.typeface.json'
 import montserratData from './montserrat-black.typeface.json'
+import russoData from './russo.typeface.json'
+import tekoData from './teko.typeface.json'
 
 const FONTS = {
   anton: new Font(antonData as unknown as FontData),
   montserrat: new Font(montserratData as unknown as FontData),
+  bebas: new Font(bebasData as unknown as FontData),
+  russo: new Font(russoData as unknown as FontData),
+  archivo: new Font(archivoData as unknown as FontData),
+  teko: new Font(tekoData as unknown as FontData),
 }
 export type FontKey = keyof typeof FONTS
 

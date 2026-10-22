@@ -81,16 +81,20 @@ function vehicleCategory(typeBody: string | null | undefined): string | undefine
   return undefined
 }
 
-/** Estilos de subtítulo de los últimos Reels del Director IA: Claude no los repite. */
-async function recentCaptionStyles(jobId: string): Promise<string[]> {
+/** Estilos de subtítulo y tipografías de los últimos Reels del Director IA: Claude no los repite. */
+async function recentStyles(jobId: string): Promise<{ estilosRecientes: string[]; tipografiasRecientes: string[] }> {
   const { data } = await getServiceClient()
     .from('video_jobs_v2')
-    .select('captionStyle:gemini_analysis->plan->>captionStyle')
+    .select('captionStyle:gemini_analysis->plan->>captionStyle, typeface:gemini_analysis->plan->>typeface')
     .neq('id', jobId)
     .not('gemini_analysis->plan->>captionStyle', 'is', null)
     .order('created_at', { ascending: false })
     .limit(3)
-  return ((data ?? []) as Array<{ captionStyle: string | null }>).flatMap((r) => (r.captionStyle ? [r.captionStyle] : []))
+  const rows = (data ?? []) as Array<{ captionStyle: string | null; typeface: string | null }>
+  return {
+    estilosRecientes: rows.flatMap((r) => (r.captionStyle ? [r.captionStyle] : [])),
+    tipografiasRecientes: rows.flatMap((r) => (r.typeface ? [r.typeface] : [])),
+  }
 }
 
 /** Códigos del inventario que no son parte del nombre comercial: aire, puertas, tracción, caja, cabina, cilindrada. */
@@ -261,7 +265,7 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
     await downloadClips(jobId, paths, clipsDir)
 
     const vehicleFile = path.join(work, 'vehiculo.json')
-    const vehicle = { ...(await vehicleInfoForJob(job)), estilosRecientes: await recentCaptionStyles(jobId) }
+    const vehicle = { ...(await vehicleInfoForJob(job)), ...(await recentStyles(jobId)) }
     fs.writeFileSync(vehicleFile, JSON.stringify(vehicle, null, 2))
 
     const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined

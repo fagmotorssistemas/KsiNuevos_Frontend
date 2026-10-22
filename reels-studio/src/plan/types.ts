@@ -2,7 +2,7 @@
  * Props que consume la composición de Remotion. Todo en cuadros (frames) del Reel final
  * y en píxeles del lienzo vertical. Debe ser JSON serializable (se pasa como inputProps).
  */
-import type { CaptionStyle, CUT_ROLES, FocusBox, HookStyle, PLACEMENTS, RawGraphic, TRANSITIONS } from './schema'
+import type { CaptionStyle, CUT_ROLES, FocusBox, HookStyle, PLACEMENTS, RawGraphic, TRANSITIONS, TypefaceName } from './schema'
 
 /** Palabra de AssemblyAI: tiempos en milisegundos dentro del clip. */
 export type Word = { text: string; start: number; end: number }
@@ -56,8 +56,17 @@ export type TimelineCut = {
   punches: number[]
   /** Intensidad del tramo (1–3): cuánto se mueve la cámara y qué tan fuertes son los golpes. */
   energy: Energy
-  /** Plano del teaser de apertura: sin voz (solo música y efectos). */
-  teaser?: boolean
+}
+
+/** Plano del teaser: se ve encima de la voz del arranque, sin su propio audio (la voz del asesor sigue sonando). */
+export type TimelineInsert = {
+  clipId: string
+  src: string
+  srcWidth: number
+  srcHeight: number
+  fromFrame: number
+  durationInFrames: number
+  trimStartSec: number
 }
 
 export type Energy = 1 | 2 | 3
@@ -110,6 +119,8 @@ export type ReelProps = {
   height: number
   durationInFrames: number
   cuts: TimelineCut[]
+  /** Teaser encima de la voz del arranque. Siempre explícito, como `music`. */
+  inserts: TimelineInsert[]
   /** Cola final (último cuadro congelado) para que el CTA respire. */
   tailFrames: number
   graphics: TimelineGraphic[]
@@ -118,6 +129,8 @@ export type ReelProps = {
   captionStyle: CaptionStyle
   /** Cómo entra el texto del gancho, elegido por el director. Siempre explícito, como `music`. */
   hookStyle: HookStyle
+  /** Juego tipográfico de los títulos, elegido por el director. Siempre explícito, como `music`. */
+  typeface: TypefaceName
   /** Siempre explícito, como `music`. */
   theme: ReelTheme
   /** Siempre explícito, como `music`. */
