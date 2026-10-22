@@ -1,6 +1,6 @@
 /**
  * Planifica qué clip B-roll (solo visual) se muestra en cada tramo del bloque de voz en off,
- * usando (1) coocurrencias tema↔plano de los visual_overlay que ya eligió Gemini en el resto del Reel,
+ * usando (1) coocurrencias tema↔plano de los visual_overlay que ya eligió Claude en el resto del Reel,
  * (2) palabras de la VO en ventanas de tiempo, (3) pistas del nombre de archivo subido.
  */
 
@@ -163,7 +163,7 @@ export function planLinearBrollTiling(
 }
 
 /**
- * Ventanas temporales según la VO + pistas de Gemini (`visual_overlay`) + nombre de archivo.
+ * Ventanas temporales según la VO + pistas de Claude (`visual_overlay`) + nombre de archivo.
  */
 export function buildSemanticVoiceOverBrollTiles(
   voDurationSec: number,

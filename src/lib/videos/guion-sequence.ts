@@ -110,7 +110,7 @@ export function tryBuildSequenceFromGuionDialogues(
     if (!best || bestScore < MIN_DIALOGUE_SEGMENT_MATCH_FALLBACK) {
       if (opts?.jobId) {
         console.warn(
-          `[GuionSequence][${opts.jobId}] FALLO diálogo ${i + 1}/${dialogues.length} (mejor score=${bestScore.toFixed(3)}): "${line.slice(0, 72)}…" — se usará Gemini`
+          `[GuionSequence][${opts.jobId}] FALLO diálogo ${i + 1}/${dialogues.length} (mejor score=${bestScore.toFixed(3)}): "${line.slice(0, 72)}…" — se usará Claude`
         )
       }
       return null

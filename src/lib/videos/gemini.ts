@@ -1,27 +1,16 @@
 /**
- * Módulo Gemini V2 — Análisis multimodal (video + mapa de segmentos) para la Fábrica de Reels.
+ * Editor de Reels — Claude elige y ordena los cortes del mapa de segmentos (claude-editor.ts)
+ * y aquí se validan con las reglas editoriales de la casa.
  *
- * Cuando useVisualAnalysis=true, Gemini recibe tanto los videos reales
- * (subidos al File API de Google) como el mapa de segmentos en texto.
- * Cuando useVisualAnalysis=false (fallback), solo recibe el texto.
+ * Con cuadros (segment-frames.ts) Claude ve cada toma; sin ffmpeg trabaja solo con texto.
+ * El nombre del archivo y de `gemini_analysis` se conservan por los datos ya guardados.
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Segment, SequenceItem, SequenceVisualOverlay } from './segmenter'
-import type { GoogleFileRef } from './google-file-api'
 import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
 import { defaultClipKinds } from './clip-config'
-
-const MODEL_VISUAL = 'gemini-2.5-pro'
-const MODEL_TEXT = 'gemini-2.5-pro'
-const GEMINI_TIMEOUT_MS = 180_000
-const MAX_RETRIES = 2
-
-function getGenAI() {
-  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-}
-
-function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)) }
+import { requestReelEditPlan, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
+import type { SegmentFrame } from './segment-frames'
 
 // ─── Tipos de respuesta ──────────────────────────────────────────────────────
 
@@ -34,24 +23,10 @@ export interface GeminiSegmentAnalysis {
    * El valor se acota en servidor: con ≥2 segmentos suele quedar en [1, n−1] (ni abre ni cierra el Reel).
    */
   voice_over_insert_after_count?: number
-}
-
-// ─── Extracción JSON ─────────────────────────────────────────────────────────
-
-function extractJsonObject(text: string): string {
-  const stripped = text
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
-    .trim()
-
-  const start = stripped.indexOf('{')
-  const end = stripped.lastIndexOf('}')
-
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error(`No se encontró JSON válido en la respuesta: ${stripped.slice(0, 300)}`)
-  }
-
-  return stripped.slice(start, end + 1)
+  /** Frases del diálogo a destacar en subtítulos (misma llamada a Claude; el re-render las reutiliza). */
+  caption_highlights?: AiHighlightPhrase[]
+  /** Tokens y costo aproximado de la llamada a Claude. */
+  editor_usage?: ReelEditorUsage
 }
 
 function inferClipCountFromSegments(allSegments: Segment[]): number {
@@ -130,7 +105,7 @@ function buildClipCatalogForManualVoiceOver(
 
 /**
  * Catálogo legible por clip: transcripción completa de los que tienen habla + fichas de B-roll.
- * Gemini usa esto junto con los videos para decidir montaje, orden y visual_overlay sin intervención manual.
+ * Claude usa esto junto con los videos para decidir montaje, orden y visual_overlay sin intervención manual.
  */
 function buildClipCatalogForPrompt(
   allSegments: Segment[],
@@ -246,7 +221,7 @@ function normalizeVisualOverlaysInSequence(
     const vIdx = ov.clip_index
     if (!Number.isInteger(vIdx) || vIdx < 0 || vIdx >= kinds.length || kinds[vIdx] !== 'visual_only') {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][Gemini] visual_overlay inválido (clip_index no es B-roll), se ignora.`
+        `[VideoV2Pipeline][${jobId}][Editor] visual_overlay inválido (clip_index no es B-roll), se ignora.`
       )
       return { ...item, visual_overlay: undefined }
     }
@@ -254,7 +229,7 @@ function normalizeVisualOverlaysInSequence(
     const seg = allSegments.find((s) => s.segment_id === item.segment_id)
     if (!seg || seg.source_kind === 'visual_only') {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][Gemini] visual_overlay requiere un segment_id de clip con habla; se ignora.`
+        `[VideoV2Pipeline][${jobId}][Editor] visual_overlay requiere un segment_id de clip con habla; se ignora.`
       )
       return { ...item, visual_overlay: undefined }
     }
@@ -279,7 +254,7 @@ function normalizeVisualOverlaysInSequence(
     od = ove - ovs
     if (od < Math.max(0.8, target) - 0.15) {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][Gemini] B-roll clip ${vIdx} no cubre ${target.toFixed(2)}s; se quita overlay.`
+        `[VideoV2Pipeline][${jobId}][Editor] B-roll clip ${vIdx} no cubre ${target.toFixed(2)}s; se quita overlay.`
       )
       return { ...item, visual_overlay: undefined }
     }
@@ -298,7 +273,7 @@ function normalizeVisualOverlaysInSequence(
 /** Microclips de apertura (marca / modelo / año en vídeos de ~1s): no descartar por duración casi nula. */
 const PRESENTATION_MICROCLIP_MIN_SEC = 0.06
 
-/** Motivo fijo al inyectar segmentos de presentación omitidos por Gemini (`validateGeminiSequence`). */
+/** Motivo fijo al inyectar segmentos de presentación omitidos por Claude (`validateGeminiSequence`). */
 const INJECTED_PRESENTATION_REASON_MARKER = 'micro-clip presentación forzado al inicio'
 
 const CAR_BRANDS = [
@@ -425,7 +400,7 @@ function strengthenOpeningPresentation(
         )
       if (hasBrand && (hasYear || hasModel)) {
         console.log(
-          `[VideoV2Pipeline][${jobId}][Gemini] Apertura: grupo de ${openingGroup.length} micro-clips de presentación aceptado (marca+modelo/año combinados).`
+          `[VideoV2Pipeline][${jobId}][Editor] Apertura: grupo de ${openingGroup.length} micro-clips de presentación aceptado (marca+modelo/año combinados).`
         )
         return sequence
       }
@@ -443,7 +418,7 @@ function strengthenOpeningPresentation(
       sequence[0] = sequence[j]!
       sequence[j] = tmp
       console.warn(
-        `[VideoV2Pipeline][${jobId}][Gemini] Apertura: se reordenó el primer corte para incluir marca+modelo/audio más completo (${sj.segment_id}).`
+        `[VideoV2Pipeline][${jobId}][Editor] Apertura: se reordenó el primer corte para incluir marca+modelo/audio más completo (${sj.segment_id}).`
       )
       return sequence
     }
@@ -467,13 +442,13 @@ function strengthenOpeningPresentation(
     const rest = sequence.filter((_, idx) => idx !== 0)
     const merged = [sequenceItemFromSegment(pick, 1, 'apertura: marca+modelo/año (sustituye primer corte débil)'), ...rest]
     console.warn(
-      `[VideoV2Pipeline][${jobId}][Gemini] Apertura: primer corte sustituido por ${pick.segment_id} (marca+modelo/año).`
+      `[VideoV2Pipeline][${jobId}][Editor] Apertura: primer corte sustituido por ${pick.segment_id} (marca+modelo/año).`
     )
     return merged
   }
 
   console.warn(
-    `[VideoV2Pipeline][${jobId}][Gemini] Apertura: no se encontró segmento alternativo con marca+modelo/año; revisa el mapa o el guion.`
+    `[VideoV2Pipeline][${jobId}][Editor] Apertura: no se encontró segmento alternativo con marca+modelo/año; revisa el mapa o el guion.`
   )
   return sequence
 }
@@ -550,7 +525,7 @@ function hasEmotionalOrLifestyleHookTone(t: string): boolean {
   )
 }
 
-/** El `reason` de Gemini describe explícitamente un gancho de apertura / anti-scroll (aunque el ASR sea breve o coloquial). */
+/** El `reason` de Claude describe explícitamente un gancho de apertura / anti-scroll (aunque el ASR sea breve o coloquial). */
 function isOpeningScrollHookFromEditorialReason(editorialReason?: string | null): boolean {
   if (!editorialReason || !editorialReason.trim()) return false
   const r = normalizeText(editorialReason)
@@ -573,7 +548,7 @@ function isInjectedPresentationMicroclip(item: SequenceItem): boolean {
 
 /**
  * Gancho narrativo de apertura (necesidad del cliente, propósito, pregunta) — debe ir antes que motor/ficha.
- * `editorialReason`: motivo de Gemini; ayuda cuando el ASR no coincide con patrones (p. ej. "si esta camioneta trabaja").
+ * `editorialReason`: motivo de Claude; ayuda cuando el ASR no coincide con patrones (p. ej. "si esta camioneta trabaja").
  */
 function isNarrativeNeedHookSegment(seg: Segment, editorialReason?: string | null): boolean {
   const t = normalizeText(seg.text)
@@ -623,7 +598,7 @@ function segmentMentionsPowertrainSpecs(t: string): boolean {
 }
 
 /**
- * Texto del segmento (ASR) + motivo editorial de Gemini: el audio a veces no dice "motor" pero el reason sí
+ * Texto del segmento (ASR) + motivo editorial de Claude: el audio a veces no dice "motor" pero el reason sí
  * describe ficha / compartimento del motor.
  */
 function editorialBundleForSpecs(seg: Segment, geminiReason?: string | null): string {
@@ -725,7 +700,7 @@ function introFactSequenceStage(seg: Segment | undefined): number {
 }
 
 /**
- * El motivo editorial de Gemini a veces etiqueta mejor el rol que el ASR (p. ej. “Presentación del producto”).
+ * El motivo editorial de Claude a veces etiqueta mejor el rol que el ASR (p. ej. “Presentación del producto”).
  */
 function geminiReasonHintsProductIdentityPresentation(reason?: string | null): boolean {
   if (!reason?.trim()) return false
@@ -996,7 +971,7 @@ function dedupeSequenceByUtterance(
     const text = seg.text
     if (keptTexts.some((t) => isSameUtterance(t, text))) {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][Gemini] Dedupe: descartando ${item.segment_id} (misma frase que un clip ya elegido)`
+        `[VideoV2Pipeline][${jobId}][Editor] Dedupe: descartando ${item.segment_id} (misma frase que un clip ya elegido)`
       )
       continue
     }
@@ -1006,7 +981,7 @@ function dedupeSequenceByUtterance(
   return kept
 }
 
-/** Tras el orden editorial, evita dos cortes seguidos casi idénticos (Gemini a veces repite la misma idea). */
+/** Tras el orden editorial, evita dos cortes seguidos casi idénticos (Claude a veces repite la misma idea). */
 function dedupeConsecutiveNearDuplicates(
   sequence: SequenceItem[],
   segmentLookup: Map<string, Segment>,
@@ -1030,7 +1005,7 @@ function dedupeConsecutiveNearDuplicates(
       }
       if (isSameUtterance(prevSeg.text, seg.text) || consecutiveNearDuplicateUtterance(prevSeg.text, seg.text)) {
         console.warn(
-          `[VideoV2Pipeline][${jobId}][Gemini] Dedupe consecutivo: descartando ${item.segment_id} (muy similar al corte anterior)`
+          `[VideoV2Pipeline][${jobId}][Editor] Dedupe consecutivo: descartando ${item.segment_id} (muy similar al corte anterior)`
         )
         continue
       }
@@ -1043,7 +1018,7 @@ function dedupeConsecutiveNearDuplicates(
 interface ValidateGeminiSequenceOptions {
   /** Descarta cualquier ítem cuyo segmento pertenezca a estos clip_index (p. ej. clip de VO manual). */
   excludeClipIndicesFromSequence?: number[]
-  /** Si true, no se normaliza visual_overlay (modo VO manual: sin B-roll decidido por Gemini). */
+  /** Si true, no se normaliza visual_overlay (modo VO manual: sin B-roll decidido por Claude). */
   disableVisualOverlayNormalization?: boolean
   /** Si está definido, se valida y devuelve voice_over_insert_after_count en el resultado. */
   manualVoiceOverBaseClipIndex?: number
@@ -1072,7 +1047,7 @@ function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLen
 }
 
 /**
- * Ajusta dónde va el bloque VO: Gemini propone `voice_over_insert_after_count`; se acota para que
+ * Ajusta dónde va el bloque VO: Claude propone `voice_over_insert_after_count`; se acota para que
  * haya al menos un corte antes y otro después cuando hay material suficiente, respetando presentación
  * al inicio y CTA antes del cierre. Opcionalmente se alinea el punto de inserción al 30–65 % del tiempo
  * narrativo para evitar que el VO abra o cierre el Reel por conteo de cortes engañoso.
@@ -1111,7 +1086,7 @@ function finalizeVoiceOverInsertPlacement(
 
   if (minI > maxI) {
     console.warn(
-      `[VideoV2Pipeline][${jobId}][Gemini] VO insert: conflicto min (${minI}) vs max (${maxI}); se usa max (CTA tras VO).`
+      `[VideoV2Pipeline][${jobId}][Editor] VO insert: conflicto min (${minI}) vs max (${maxI}); se usa max (CTA tras VO).`
     )
     return maxI
   }
@@ -1152,7 +1127,7 @@ function finalizeVoiceOverInsertPlacement(
         m = Math.max(idealMin, Math.min(m, idealMax))
         if (m !== prev) {
           console.log(
-            `[VideoV2Pipeline][${jobId}][Gemini] VO insert: ajuste temporal ${prev} → ${m} ` +
+            `[VideoV2Pipeline][${jobId}][Editor] VO insert: ajuste temporal ${prev} → ${m} ` +
               `(${((sequence.slice(0, m).reduce((s, x) => s + x.trim_duration, 0) / totalDur) * 100).toFixed(0)}% del tiempo narrativo)`
           )
         }
@@ -1164,7 +1139,7 @@ function finalizeVoiceOverInsertPlacement(
     const target = Math.min(2, maxI)
     if (target > m) {
       console.log(
-        `[VideoV2Pipeline][${jobId}][Gemini] VO insert: se prefiere al menos 2 cortes antes del VO (presentación + desarrollo); ${m} → ${target}`
+        `[VideoV2Pipeline][${jobId}][Editor] VO insert: se prefiere al menos 2 cortes antes del VO (presentación + desarrollo); ${m} → ${target}`
       )
       m = target
     }
@@ -1175,7 +1150,7 @@ function finalizeVoiceOverInsertPlacement(
   }
   if (m !== requested) {
     console.warn(
-      `[VideoV2Pipeline][${jobId}][Gemini] voice_over_insert_after_count ajustado ${requested} → ${m} (arco: presentación → VO → CTA)`
+      `[VideoV2Pipeline][${jobId}][Editor] voice_over_insert_after_count ajustado ${requested} → ${m} (arco: presentación → VO → CTA)`
     )
   }
   return m
@@ -1220,7 +1195,7 @@ function pinManualIntroClipIndicesToStart(
   for (const clipIdx of clipIndicesInOrder) {
     if (excludedSet.has(clipIdx)) {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][Gemini] Intro manual: se omite clip ${clipIdx} (reservado / excluido del montaje).`
+        `[VideoV2Pipeline][${jobId}][Editor] Intro manual: se omite clip ${clipIdx} (reservado / excluido del montaje).`
       )
       continue
     }
@@ -1240,7 +1215,7 @@ function pinManualIntroClipIndicesToStart(
         continue
       }
       console.warn(
-        `[VideoV2Pipeline][${jobId}][Gemini] Intro manual: clip ${clipIdx} sin habla en el mapa — se omite.`
+        `[VideoV2Pipeline][${jobId}][Editor] Intro manual: clip ${clipIdx} sin habla en el mapa — se omite.`
       )
       continue
     }
@@ -1258,7 +1233,7 @@ function pinManualIntroClipIndicesToStart(
   })
 
   console.log(
-    `[VideoV2Pipeline][${jobId}][Gemini] Intro fija manual: ${picked.length} corte(s) al inicio (orden de slots respetado): ` +
+    `[VideoV2Pipeline][${jobId}][Editor] Intro fija manual: ${picked.length} corte(s) al inicio (orden de slots respetado): ` +
       picked.map((p) => p.segment_id).join(' → ')
   )
   return { sequence: [...picked, ...tail], pinnedCount: picked.length }
@@ -1320,7 +1295,7 @@ function reorderSequenceByManualClipOrder(
       const seg = pickBestSegmentForManualIntroClip(candidates) ?? candidates[0]
       if (seg) {
         console.warn(
-          `[VideoV2Pipeline][${jobId}][Gemini] Orden manual: clip ${idx} sin cortes en la propuesta — se inserta un corte por defecto.`
+          `[VideoV2Pipeline][${jobId}][Editor] Orden manual: clip ${idx} sin cortes en la propuesta — se inserta un corte por defecto.`
         )
         bucket = [sequenceItemFromSegment(seg, 0, `orden manual: clip ${idx} (mínimo requerido)`)]
       } else {
@@ -1329,7 +1304,7 @@ function reorderSequenceByManualClipOrder(
           .sort((a, b) => a.start_s - b.start_s || a.segment_id.localeCompare(b.segment_id))[0]
         if (visualFallback) {
           console.warn(
-            `[VideoV2Pipeline][${jobId}][Gemini] Orden manual: clip ${idx} solo con plano — fallback visual.`
+            `[VideoV2Pipeline][${jobId}][Editor] Orden manual: clip ${idx} solo con plano — fallback visual.`
           )
           bucket = [
             sequenceItemFromSegment(visualFallback, 0, `orden manual: clip ${idx} (plano, fallback)`),
@@ -1382,13 +1357,13 @@ function validateSequence(
       const seg = segmentLookup.get(item.segment_id)
       if (!seg) {
         console.warn(
-          `[VideoV2Pipeline][${jobId}][Gemini] segment_id desconocido "${item.segment_id}", se descarta.`
+          `[VideoV2Pipeline][${jobId}][Editor] segment_id desconocido "${item.segment_id}", se descarta.`
         )
         return false
       }
       if (excluded.includes(seg.clip_index)) {
         console.warn(
-          `[VideoV2Pipeline][${jobId}][Gemini] Se descarta ${item.segment_id} (clip ${seg.clip_index} excluido del montaje Gemini).`
+          `[VideoV2Pipeline][${jobId}][Editor] Se descarta ${item.segment_id} (clip ${seg.clip_index} excluido del montaje Claude).`
         )
         return false
       }
@@ -1398,7 +1373,7 @@ function validateSequence(
       const seg = segmentLookup.get(item.segment_id)
       if (seg?.source_kind === 'visual_only') {
         console.warn(
-          `[VideoV2Pipeline][${jobId}][Gemini] Se descarta ${item.segment_id} como corte principal (clip B-roll sin habla).`
+          `[VideoV2Pipeline][${jobId}][Editor] Se descarta ${item.segment_id} como corte principal (clip B-roll sin habla).`
         )
         return false
       }
@@ -1443,7 +1418,7 @@ function validateSequence(
   })
   if (sequence.length < before) {
     console.log(
-      `[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos ` +
+      `[VideoV2Pipeline][${jobId}][Editor] Se eliminaron ${before - sequence.length} segmentos ultra-cortos ` +
         `(<0.6s no-presentación, o presentación <${PRESENTATION_MICROCLIP_MIN_SEC}s)`
     )
   }
@@ -1461,7 +1436,7 @@ function validateSequence(
       sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
     } else {
       console.log(
-        `[VideoV2Pipeline][${jobId}][Gemini] Orden manual de clips: ${manualOrder.join(' → ')} ` +
+        `[VideoV2Pipeline][${jobId}][Editor] Orden manual de clips: ${manualOrder.join(' → ')} ` +
           '(macro-orden fijo; sin dedupe global ni reorden editorial automático entre clips)'
       )
       sequence = reorderSequenceByManualClipOrder(
@@ -1476,12 +1451,12 @@ function validateSequence(
     }
   } else if (opts?.guionDeterministicOrder) {
     console.log(
-      `[VideoV2Pipeline][${jobId}][Gemini] Orden GUION determinista: se conserva la secuencia ` +
+      `[VideoV2Pipeline][${jobId}][Editor] Orden GUION determinista: se conserva la secuencia ` +
         `(sin enforceEditorialOrder ni inyección de apertura)`
     )
     sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
   } else {
-    // 4) Deduplicar en el orden de Gemini (antes de reordenar): así conservamos la toma que el modelo
+    // 4) Deduplicar en el orden de Claude (antes de reordenar): así conservamos la toma que el modelo
     //    consideró más relevante, no la que quedó primero tras el reordenamiento editorial.
     sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
 
@@ -1492,8 +1467,8 @@ function validateSequence(
     // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
     sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
 
-    // 4d) Forzar micro-clips de presentación que Gemini ignoró (ej. "Toyota", "Prado", "2016" por separado)
-    //     Si existen segmentos de presentación ≥ PRESENTATION_MICROCLIP_MIN_SEC no incluidos por Gemini,
+    // 4d) Forzar micro-clips de presentación que Claude ignoró (ej. "Toyota", "Prado", "2016" por separado)
+    //     Si existen segmentos de presentación ≥ PRESENTATION_MICROCLIP_MIN_SEC no incluidos por Claude,
     //     se insertan al inicio en orden de aparición (clip_index, luego start_s), si no están ya en la secuencia.
     {
       const usedIdsInSeq = new Set(sequence.map((x) => x.segment_id))
@@ -1514,7 +1489,7 @@ function validateSequence(
           sequenceItemFromSegment(s, idx + 1, INJECTED_PRESENTATION_REASON_MARKER)
         )
         console.log(
-          `[VideoV2Pipeline][${jobId}][Gemini] Se inyectan ${injected.length} micro-clips de presentación omitidos por Gemini: ` +
+          `[VideoV2Pipeline][${jobId}][Editor] Se inyectan ${injected.length} micro-clips de presentación omitidos por Claude: ` +
             injected.map((x) => x.segment_id).join(', ')
         )
         // Insertar al frente, antes del resto de la secuencia
@@ -1532,7 +1507,7 @@ function validateSequence(
   let totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
   if (totalDuration < 20) {
     console.log(
-      `[VideoV2Pipeline][${jobId}][Gemini] Duración total ${totalDuration.toFixed(1)}s (<20s): ` +
+      `[VideoV2Pipeline][${jobId}][Editor] Duración total ${totalDuration.toFixed(1)}s (<20s): ` +
         'se mantiene el montaje sin añadir segmentos de relleno.'
     )
   }
@@ -1568,7 +1543,7 @@ function validateSequence(
         totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
       }
       console.log(
-        `[VideoV2Pipeline][${jobId}][Gemini] Reel muy largo: recortado a ${totalDuration.toFixed(1)}s (tope seguridad ${REEL_TRIM_TARGET_SEC}s)`
+        `[VideoV2Pipeline][${jobId}][Editor] Reel muy largo: recortado a ${totalDuration.toFixed(1)}s (tope seguridad ${REEL_TRIM_TARGET_SEC}s)`
       )
     }
   } else {
@@ -1745,9 +1720,20 @@ ${capped}
 `
 }
 
+function buildOutputBlock(manual: boolean): string {
+  return `FORMATO DE LA RESPUESTA (JSON):
+- "sequence": los cortes en el orden del Reel. En cada uno: segment_id, clip_index, trim_start, trim_end, trim_duration, order, reason (en el primer corte, marca + modelo completo) y visual_overlay (objeto o null).
+- "total_duration": suma de trim_duration. "overall_strategy": una frase sobre la estrategia editorial.
+- "voice_over_insert_after_count": ${manual ? 'obligatorio (ver arco narrativo)' : 'null (no hay bloque de voz en off)'}.
+- "caption_highlights": entre 3 y 8 frases del DIÁLOGO de los cortes elegidos que merecen destacarse en pantalla; priority 1 = más importante.
+  · "phrase" debe aparecer (o casi) en la transcripción: ej. "amplia cabina", "pantalla multimedia", "resistencia".
+  · kind "spec": motor, cilindrada, 4x4, diésel, turbo. "feature": cabina, pantalla, equipamiento, diseño. "emotional": confianza, resistencia, durabilidad, desempeño.
+  · Sin "comenta", sin marca del concesionario ni CTAs, sin repetir la misma idea.`
+}
+
 function buildVisualPrompt(
   formattedSegmentMap: string,
-  videoCount: number,
+  frameCount: number,
   clipKinds: VideoClipKind[],
   clipCatalog: string,
   manualVoiceOverBaseClipIndex?: number | null,
@@ -1760,8 +1746,6 @@ function buildVisualPrompt(
 ): string {
   const manual = manualVoiceOverBaseClipIndex != null || manualVoiceOverFromExternalAudio === true
   const clipOrderFixed = (manualClipOrderIndices?.length ?? 0) > 0
-  const videoRef = videoCount === 1 ? 'el video' : `los ${videoCount} videos`
-  const plural = videoCount > 1 ? 's' : ''
   const brollExtra =
     !manual && clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
   const autonomousBlock = clipOrderFixed
@@ -1788,7 +1772,7 @@ function buildVisualPrompt(
 
   return `Eres un editor de video profesional especializado en crear Reels virales de venta de autos para Instagram y TikTok. Eres el mejor del mundo en esto. Tu objetivo es crear un Reel que detenga el scroll y genere engagement.
 
-Acabas de ver ${videoRef} completo${plural}. Tienes el catálogo de transcripciones y tipos de clip, y el mapa fino de segmentos con timestamps EXACTOS.
+Arriba tienes ${frameCount} cuadros de las tomas, cada uno etiquetado con su segment_id: úsalos para juzgar encuadre, energía del vendedor y qué parte del auto se ve. También tienes el catálogo de transcripciones y tipos de clip, y el mapa fino de segmentos con timestamps EXACTOS.
 
 ${mapNote}${clipCatalog}
 ${vehicleBlock}${assemblyBlock}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}${autonomousBlock}
@@ -1829,10 +1813,7 @@ ESTRUCTURA IDEAL${manual ? ' (el bloque VO suele ir en el tramo 2–3)' : ''}:
 1. Presentación / gancho del vehículo (3-6s) → 2. Desarrollo (5-10s; aquí encaja el bloque VO con planos) → 3. Beneficios o precio (5-8s) → 4. Cierre con CTA (3-5s)
 
 ${manual ? MANUAL_VO_ARCO_Y_JSON : ''}
-Responde SOLO con este JSON, sin markdown, sin explicaciones:
-${manual
-  ? '{"sequence":[{"segment_id":"1_1","clip_index":1,"trim_start":0,"trim_end":4.5,"trim_duration":4.5,"order":1,"reason":"Nissan Tiida 2012"},{"segment_id":"2_1","clip_index":2,"trim_start":1,"trim_end":5,"trim_duration":4,"order":2,"reason":"equipamiento"},{"segment_id":"2_2","clip_index":2,"trim_start":8,"trim_end":12,"trim_duration":4,"order":3,"reason":"motor"},{"segment_id":"1_5","clip_index":1,"trim_start":40,"trim_end":44,"trim_duration":4,"order":4,"reason":"CTA comenta"}],"total_duration":28,"overall_strategy":"Presentación, desarrollo, VO con planos, CTA final","voice_over_insert_after_count":2}'
-  : '{"sequence":[{"segment_id":"0_2","clip_index":0,"trim_start":35.10,"trim_end":41.80,"trim_duration":6.70,"order":1,"reason":"gancho visual: vendedor energético frente al auto mencionando precio"}],"total_duration":28.00,"overall_strategy":"descripción breve de la estrategia editorial"}'}`
+${buildOutputBlock(manual)}`
 }
 
 function buildTextOnlyPrompt(
@@ -1909,16 +1890,13 @@ ${manual
 - GANCHO (primer segmento): La frase más impactante, una pregunta, un precio, algo que detenga el scroll
 - Puedes reordenar segmentos: no importa el orden original del video
 - Puedes usar segmentos del mismo clip de forma discontinua
-- Descarta: presentaciones aburridas, muletillas, repeticiones, silencios`}
+- Descarta: muletillas, repeticiones, silencios`}
 
 ESTRUCTURA IDEAL${manual ? ' (bloque VO en desarrollo)' : ''}:
 1. Presentación del vehículo (3-6s) → 2. Desarrollo (5-10s; bloque VO con planos) → 3. Beneficios/precio (5-8s) → 4. Cierre CTA (3-5s)
 
 ${manual ? MANUAL_VO_ARCO_Y_JSON : ''}
-Responde SOLO con este JSON, sin markdown, sin explicaciones:
-${manual
-  ? '{"sequence":[{"segment_id":"1_1","clip_index":1,"trim_start":0,"trim_end":4.5,"trim_duration":4.5,"order":1,"reason":"Nissan Tiida 2012"},{"segment_id":"2_1","clip_index":2,"trim_start":1,"trim_end":5,"trim_duration":4,"order":2,"reason":"equipamiento"},{"segment_id":"2_2","clip_index":2,"trim_start":8,"trim_end":12,"trim_duration":4,"order":3,"reason":"motor"},{"segment_id":"1_5","clip_index":1,"trim_start":40,"trim_end":44,"trim_duration":4,"order":4,"reason":"CTA"}],"total_duration":28,"overall_strategy":"Arco completo con VO central","voice_over_insert_after_count":2}'
-  : '{"sequence":[{"segment_id":"0_2","clip_index":0,"trim_start":35.10,"trim_end":41.80,"trim_duration":6.70,"order":1,"reason":"gancho: pregunta directa sobre el auto"}],"total_duration":28.00,"overall_strategy":"descripción breve de la estrategia"}'}`
+${buildOutputBlock(manual)}`
 }
 
 // ─── Función principal: analyzeSegments ──────────────────────────────────────
@@ -1945,25 +1923,22 @@ export interface AnalyzeSegmentsOptions {
 }
 
 /**
- * Envía el mapa de segmentos a Gemini, opcionalmente con los videos reales
- * subidos al File API de Google para análisis visual + textual.
+ * Pide a Claude el montaje (una sola llamada) y lo valida con las reglas editoriales.
  *
  * @param formattedSegmentMap  Mapa de segmentos formateado en texto
  * @param allSegments          Array de todos los segmentos para validación
  * @param jobId                ID del job para logging
- * @param googleFileRefs       Referencias a videos en el File API de Google (vacío = solo texto)
- * @param useVisualAnalysis    true = enviar videos + texto, false = solo texto
+ * @param frames               Cuadros etiquetados por segment_id (vacío = solo texto)
  */
 export async function analyzeSegments(
   formattedSegmentMap: string,
   allSegments: Segment[],
   jobId: string,
-  googleFileRefs: GoogleFileRef[] = [],
-  useVisualAnalysis: boolean = false,
+  frames: SegmentFrame[] = [],
   clipKinds: VideoClipKind[] = [],
   options?: AnalyzeSegmentsOptions
 ): Promise<GeminiSegmentAnalysis> {
-  const mode = useVisualAnalysis && googleFileRefs.length > 0 ? 'visual+texto' : 'solo texto'
+  const mode = frames.length > 0 ? `visual (${frames.length} cuadros)+texto` : 'solo texto'
   const clipCount = inferClipCountFromSegments(allSegments)
   const kindsForPrompt = clipKindsResolved(clipKinds, clipCount)
   const manualVo = options?.manualVoiceOverBaseClipIndex
@@ -1993,93 +1968,37 @@ export async function analyzeSegments(
     }
     return Object.keys(o).length > 0 ? o : undefined
   })()
-  console.log(`[VideoV2Pipeline][${jobId}][Gemini] Analizando ${allSegments.length} segmentos (modo: ${mode})`)
+  console.log(`[VideoV2Pipeline][${jobId}][Claude] Analizando ${allSegments.length} segmentos (modo: ${mode})`)
 
-  const genAI = getGenAI()
-  const selectedModel = (useVisualAnalysis && googleFileRefs.length > 0) ? MODEL_VISUAL : MODEL_TEXT
-  const model = genAI.getGenerativeModel({ model: selectedModel })
+  const promptArgs = [
+    clipCatalog,
+    manualVo ?? null,
+    scriptGuidance,
+    externalVo,
+    options?.scriptDialogueLines ?? null,
+    options?.assemblyTranscriptDump ?? null,
+    options?.canonicalVehicle ?? null,
+    options?.manualClipOrderIndices,
+  ] as const
+  const prompt =
+    frames.length > 0
+      ? buildVisualPrompt(formattedSegmentMap, frames.length, kindsForPrompt, ...promptArgs)
+      : buildTextOnlyPrompt(formattedSegmentMap, kindsForPrompt, ...promptArgs)
 
-  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-    try {
-      const strictSuffix = attempt > 1
-        ? '\n\nIMPORTANTE: Responde SOLO con el JSON, sin texto adicional, sin bloques de código, sin explicaciones.'
-        : ''
+  const plan = await requestReelEditPlan(prompt, frames, jobId)
+  const validated = validateSequence(plan, allSegments, jobId, clipKinds, validateOpts)
 
-      let contentParts: Parameters<typeof model.generateContent>[0]
+  const voIns = validated.voice_over_insert_after_count
+  const voInsNote = typeof voIns === 'number' ? `, voice_over_insert_after_count=${voIns}` : ''
+  console.log(
+    `[VideoV2Pipeline][${jobId}][Claude] Secuencia validada: ${validated.sequence.length} segmentos, ${validated.total_duration.toFixed(1)}s total${voInsNote}`
+  )
 
-      if (useVisualAnalysis && googleFileRefs.length > 0) {
-        const prompt =
-          buildVisualPrompt(
-            formattedSegmentMap,
-            googleFileRefs.length,
-            kindsForPrompt,
-            clipCatalog,
-            manualVo ?? null,
-            scriptGuidance,
-            externalVo,
-            options?.scriptDialogueLines ?? null,
-            options?.assemblyTranscriptDump ?? null,
-            options?.canonicalVehicle ?? null,
-            options?.manualClipOrderIndices
-          ) + strictSuffix
-        contentParts = [
-          ...googleFileRefs.map((ref) => ({
-            fileData: { mimeType: ref.mimeType, fileUri: ref.fileUri },
-          })),
-          { text: prompt },
-        ]
-      } else {
-        contentParts =
-          buildTextOnlyPrompt(
-            formattedSegmentMap,
-            kindsForPrompt,
-            clipCatalog,
-            manualVo ?? null,
-            scriptGuidance,
-            externalVo,
-            options?.scriptDialogueLines ?? null,
-            options?.assemblyTranscriptDump ?? null,
-            options?.canonicalVehicle ?? null,
-            options?.manualClipOrderIndices
-          ) + strictSuffix
-      }
-
-      const result = await Promise.race([
-        model.generateContent(contentParts),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini timeout')), GEMINI_TIMEOUT_MS)
-        ),
-      ])
-
-      const rawText = result.response.text()
-      console.log(`[VideoV2Pipeline][${jobId}][Gemini] Respuesta (${rawText.length} chars, modo: ${mode})`)
-
-      const jsonStr = extractJsonObject(rawText)
-      const parsed = JSON.parse(jsonStr) as GeminiSegmentAnalysis
-      const validated = validateSequence(parsed, allSegments, jobId, clipKinds, validateOpts)
-
-      const voIns = validated.voice_over_insert_after_count
-      const voInsNote =
-        typeof voIns === 'number' ? `, voice_over_insert_after_count=${voIns}` : ''
-      console.log(
-        `[VideoV2Pipeline][${jobId}][Gemini] Secuencia validada: ${validated.sequence.length} segmentos, ${validated.total_duration.toFixed(1)}s total${voInsNote}`
-      )
-
-      return validated
-    } catch (err) {
-      if (attempt > MAX_RETRIES) {
-        throw new Error(`[VideoV2Pipeline][${jobId}][Gemini] Error analizando segmentos tras ${MAX_RETRIES + 1} intentos: ${err}`)
-      }
-      console.warn(`[VideoV2Pipeline][${jobId}][Gemini] Reintento ${attempt}: ${err}`)
-      await sleep(3000 * attempt)
-    }
-  }
-
-  throw new Error('Gemini no pudo analizar los segmentos')
+  return { ...validated, caption_highlights: plan.caption_highlights, editor_usage: plan.usage }
 }
 
 /**
- * Montaje determinista: un corte por cada clip en `manualOrder`, sin llamar a Gemini ni recortar ~35 s.
+ * Montaje determinista: un corte por cada clip en `manualOrder`, sin llamar a Claude ni recortar ~35 s.
  */
 export function buildForcedManualOrderClipAnalysis(
   allSegments: Segment[],
@@ -2153,7 +2072,7 @@ export function buildForcedManualOrderClipAnalysis(
 }
 
 /**
- * Valida una secuencia ya armada por diálogos del guión (sin llamar a Gemini ni reordenar editorialmente).
+ * Valida una secuencia ya armada por diálogos del guión (sin llamar a Claude ni reordenar editorialmente).
  */
 export function buildValidatedAnalysisFromGuionSequence(
   sequence: SequenceItem[],

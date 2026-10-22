@@ -80,18 +80,13 @@ import {
 import { renderSegmentsV2, getShotstackRenderStatus, resolveCaptionStyleVersion } from './shotstack'
 import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from './audio-balance'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
-import {
-  prepareVideoForGemini,
-  prepareMultipleVideosForGemini,
-  cleanupGoogleFile,
-  cleanupMultipleGoogleFiles,
-} from './google-file-api'
-import type { GoogleFileRef } from './google-file-api'
+import { extractSegmentFrames } from './segment-frames'
+import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
 
 /**
  * false = pipeline usa solo lo dicho en el audio (Assembly). No enlaza guión de marketing
  * ni mezcla dialogo/texto_pantalla del guión con la transcripción.
- * El PDF de guion subido al crear el Reel no depende de esto: siempre se envía a Gemini como guía de orden.
+ * El PDF de guion subido al crear el Reel no depende de esto: siempre se envía al editor (Claude) como guía de orden.
  */
 const USE_MARKETING_SCRIPT_IN_PIPELINE = false
 
@@ -224,7 +219,7 @@ function tryAnalysisFromGuionDialogues(
     jobId,
   })
   if (!guionSequence || guionSequence.length === 0) {
-    console.warn(`[VideoV2Pipeline][${jobId}][GuionSeq] No se pudo armar secuencia → fallback Gemini`)
+    console.warn(`[VideoV2Pipeline][${jobId}][GuionSeq] No se pudo armar secuencia → fallback Claude`)
     return null
   }
 
@@ -446,6 +441,7 @@ async function applyShowcaseCaptionHighlights(
   subtitleBlocks: SubtitleBlock[],
   sequence: SequenceItem[],
   brandConfig: BrandConfig | null,
+  aiHighlights: AiHighlightPhrase[] | undefined,
   brandMentionTimeSec?: number
 ): Promise<SubtitleBlock[]> {
   return applyCaptionHighlights({
@@ -458,7 +454,7 @@ async function applyShowcaseCaptionHighlights(
       model: brandConfig?.vehicle_line_2 ?? null,
       year: brandConfig?.vehicle_line_4 ?? null,
     },
-    useGemini: true,
+    aiHighlights,
   })
 }
 
@@ -587,25 +583,19 @@ export async function runSingleVideoPipelineFromStorage(
   musicTrimStartSecOverride?: number,
   reelAudioVolumes?: ReelAudioRenderVolumes
 ) {
-  let googleFileRef: GoogleFileRef | null = null
-
   try {
-    // A1 — EN PARALELO: Transcripción + Preparación visual para Gemini
-    console.log(`[VideoV2Pipeline][${jobId}][A1] Iniciando transcripción + preparación visual en paralelo`)
+    // A1 — Transcripción
+    console.log(`[VideoV2Pipeline][${jobId}][A1] Iniciando transcripción`)
     await updateJob(jobId, {
       status: 'transcribing',
-      current_step: 'Transcribiendo audio y preparando análisis visual en paralelo...',
+      current_step: 'Transcribiendo audio...',
       progress_percentage: 20,
     })
 
-    const [transcriptionResult, fileRefResult] = await Promise.allSettled([
-      transcribeVideoV2(signedUrl, jobId),
-      prepareVideoForGemini(signedUrl, jobId, 'single'),
-    ])
-
-    // Transcripción es obligatoria
-    if (transcriptionResult.status === 'rejected') {
-      const reason = transcriptionResult.reason
+    let transcription: Awaited<ReturnType<typeof transcribeVideoV2>>
+    try {
+      transcription = await transcribeVideoV2(signedUrl, jobId)
+    } catch (reason) {
       const detail =
         reason instanceof Error
           ? reason.cause instanceof Error
@@ -614,7 +604,7 @@ export async function runSingleVideoPipelineFromStorage(
           : String(reason)
       throw new Error(`Error en transcripción: ${detail}`)
     }
-    const { transcriptId, rawWords: rawWordsFromAssembly } = transcriptionResult.value
+    const { transcriptId, rawWords: rawWordsFromAssembly } = transcription
     const displacementHint = await loadEngineDisplacementHint(jobId)
     const rawWords = applyMotorDisplacementAsrFixToWords(
       rawWordsFromAssembly,
@@ -623,18 +613,6 @@ export async function runSingleVideoPipelineFromStorage(
       displacementHint
     )
     const srtContent = buildSrtFromRawWords(rawWords)
-
-    // Preparación visual es opcional (fallback a solo-texto)
-    let useVisualAnalysis = false
-    if (fileRefResult.status === 'fulfilled') {
-      googleFileRef = fileRefResult.value
-      useVisualAnalysis = true
-      console.log(`[VideoV2Pipeline][${jobId}][A1] Video listo en Google File API (visual analysis ON)`)
-    } else {
-      console.warn(
-        `[VideoV2Pipeline][${jobId}][GoogleFileAPI] Error al preparar video para Gemini, usando análisis solo de texto como fallback: ${fileRefResult.reason}`
-      )
-    }
 
     await updateJob(jobId, {
       assemblyai_transcript_id: transcriptId,
@@ -681,18 +659,15 @@ export async function runSingleVideoPipelineFromStorage(
       return
     }
 
-    // A3 — Análisis con Gemini (visual + texto, o solo texto como fallback)
-    console.log(`[VideoV2Pipeline][${jobId}][A3] Analizando con Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
+    // A3 — Análisis con Claude (cuadros por segmento + texto, o solo texto sin ffmpeg)
+    console.log(`[VideoV2Pipeline][${jobId}][A3] Analizando con Claude`)
     await updateJob(jobId, {
       status: 'analyzing',
-      current_step: useVisualAnalysis
-        ? 'Gemini está analizando el video y seleccionando los mejores momentos visualmente...'
-        : 'Gemini IA seleccionando los mejores momentos...',
+      current_step: 'Claude está seleccionando los mejores momentos...',
       progress_percentage: 55,
     })
 
     const formattedMap = formatSegmentMapForPrompt(segments)
-    const googleRefs = googleFileRef ? [googleFileRef] : []
     const ctx = await fetchJobGeminiContext(jobId)
     const scriptGuidanceText = ctx.scriptText ?? undefined
     const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
@@ -713,30 +688,19 @@ export async function runSingleVideoPipelineFromStorage(
       }) ?? null
 
     if (!analysis) {
-      console.log(`[VideoV2Pipeline][${jobId}][A3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
+      const frames = await extractSegmentFrames(segments, [await getSignedUrlForPath(storagePath)], jobId)
       analysis = await analyzeSegments(
         formattedMap,
         segments,
         jobId,
-        googleRefs,
-        useVisualAnalysis,
+        frames,
         [],
         Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
       )
     } else {
-      console.log(`[VideoV2Pipeline][${jobId}][A3] Secuencia por guión (sin llamada Gemini para orden)`)
+      console.log(`[VideoV2Pipeline][${jobId}][A3] Secuencia por guión (sin llamada a Claude para orden)`)
     }
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
-
-    // A3b — Limpiar archivo de Google inmediatamente después del análisis
-    if (googleFileRef) {
-      try {
-        await cleanupGoogleFile(googleFileRef, jobId)
-      } catch (cleanupErr) {
-        console.warn(`[VideoV2Pipeline][${jobId}] Error limpiando Google File (non-fatal): ${cleanupErr}`)
-      }
-      googleFileRef = null
-    }
 
     // A4 — Construir subtítulos
     console.log(`[VideoV2Pipeline][${jobId}][A4] Construyendo subtítulos`)
@@ -818,6 +782,7 @@ export async function runSingleVideoPipelineFromStorage(
       subtitleBlocks,
       analysis.sequence,
       brandConfig,
+      analysis.caption_highlights,
       brandMentionTimeSec
     )
 
@@ -848,11 +813,6 @@ export async function runSingleVideoPipelineFromStorage(
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (single): ${msg}`)
     await updateJob(jobId, { status: 'failed', error_message: msg })
-  } finally {
-    // Garantizar limpieza si el pipeline falló antes de llegar al cleanup normal
-    if (googleFileRef) {
-      cleanupGoogleFile(googleFileRef, jobId).catch(() => {})
-    }
   }
 }
 
@@ -1054,8 +1014,6 @@ export async function runMultipleClipsPipelineFromStorage(
   musicTrimStartSecOverride?: number,
   reelAudioVolumes?: ReelAudioRenderVolumes
 ) {
-  let googleFileRefs: GoogleFileRef[] = []
-
   try {
     const paths = files.map((f) => f.path!)
     const signedUrls = files.map((f) => f.signedUrl!)
@@ -1091,7 +1049,7 @@ export async function runMultipleClipsPipelineFromStorage(
       return
     }
 
-    // B1 — Transcripción de todos los clips; luego preparación visual para Gemini
+    // B1 — Transcripción de todos los clips
     console.log(`[VideoV2Pipeline][${jobId}][B1] Transcribiendo ${files.length} clips…`)
     await updateJob(jobId, {
       status: 'transcribing',
@@ -1134,21 +1092,6 @@ export async function runMultipleClipsPipelineFromStorage(
     }
 
     // Preparación visual después de transcripción (menos pico de CPU/memoria en Vercel)
-    let useVisualAnalysis = false
-    try {
-      await updateJob(jobId, {
-        current_step: 'Preparando análisis visual (Gemini)…',
-        progress_percentage: 36,
-      })
-      googleFileRefs = await prepareMultipleVideosForGemini(signedUrls, jobId, 2)
-      useVisualAnalysis = true
-      console.log(`[VideoV2Pipeline][${jobId}][B1] ${googleFileRefs.length} videos listos en Google File API`)
-    } catch (reason) {
-      console.warn(
-        `[VideoV2Pipeline][${jobId}][GoogleFileAPI] Error al preparar videos para Gemini, usando análisis solo de texto como fallback: ${reason}`
-      )
-    }
-
     const displacementHint = await loadEngineDisplacementHint(jobId)
     for (let i = 0; i < transcriptions.length; i++) {
       if (kinds[i] !== 'spoken' || transcriptions[i].rawWords.length === 0) continue
@@ -1271,13 +1214,11 @@ export async function runMultipleClipsPipelineFromStorage(
       }
     }
 
-    // B3 — Análisis con Gemini (visual + texto, o solo texto como fallback)
-    console.log(`[VideoV2Pipeline][${jobId}][B3] Analizando con Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
+    // B3 — Análisis con Claude (cuadros por segmento + texto, o solo texto sin ffmpeg)
+    console.log(`[VideoV2Pipeline][${jobId}][B3] Analizando con Claude`)
     await updateJob(jobId, {
       status: 'analyzing',
-      current_step: useVisualAnalysis
-        ? 'Gemini está analizando los videos y seleccionando los mejores momentos visualmente...'
-        : 'Gemini IA seleccionando y ordenando los mejores momentos...',
+      current_step: 'Claude está seleccionando y ordenando los mejores momentos...',
       progress_percentage: 55,
     })
 
@@ -1376,7 +1317,7 @@ export async function runMultipleClipsPipelineFromStorage(
       }
       console.log(
         `[VideoV2Pipeline][${jobId}][B3] Checklist: ${normClipOrder!.length} clip(s) obligatorios en orden ` +
-          `${normClipOrder!.join(' → ')} (sin recorte ~35s, sin Gemini para montaje)`
+          `${normClipOrder!.join(' → ')} (sin recorte ~35s, sin Claude para montaje)`
       )
       analysis = buildForcedManualOrderClipAnalysis(
         allSegments,
@@ -1398,23 +1339,30 @@ export async function runMultipleClipsPipelineFromStorage(
         }) ?? null
 
       if (!analysis) {
-        console.log(
-          `[VideoV2Pipeline][${jobId}][B3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`
-        )
         if (escenasMulti.length > 0) {
           logGuionDialogueMatchMatrix(escenasMulti, allSegments, jobId, excludeForGuion)
         }
+        // Cuadros solo de lo que Claude puede usar: cortes con habla y, sin VO manual, los B-roll para visual_overlay.
+        const brollOverlaysAllowed = voiceOverBaseClipIndex == null && voiceOverAudioPath == null
+        const frames = await extractSegmentFrames(
+          allSegments.filter(
+            (s) =>
+              !excludeFromNarrative.has(s.clip_index) &&
+              (s.source_kind !== 'visual_only' || brollOverlaysAllowed)
+          ),
+          await Promise.all(paths.map((p) => getSignedUrlForPath(p))),
+          jobId
+        )
         analysis = await analyzeSegments(
           formattedMap,
           allSegments,
           jobId,
-          googleFileRefs,
-          useVisualAnalysis,
+          frames,
           kinds,
           Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
         )
       } else {
-        console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada Gemini para orden)`)
+        console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada a Claude para orden)`)
       }
     }
     if (voiceOverBaseClipIndex != null) {
@@ -1427,7 +1375,7 @@ export async function runMultipleClipsPipelineFromStorage(
         await updateJob(jobId, {
           status: 'failed',
           error_message:
-            'Gemini devolvió solo segmentos del clip de voz en off/overlays. ' +
+            'Claude devolvió solo segmentos del clip de voz en off/overlays. ' +
             'Sube al menos otro clip con diálogo para armar el resto del Reel.',
         })
         return
@@ -1442,7 +1390,7 @@ export async function runMultipleClipsPipelineFromStorage(
         await updateJob(jobId, {
           status: 'failed',
           error_message:
-            'Gemini devolvió solo segmentos reservados como planos sobre la VO. ' +
+            'Claude devolvió solo segmentos reservados como planos sobre la VO. ' +
             'Deja al menos un clip con diálogo fuera de “clips encima del VO”.',
         })
         return
@@ -1456,19 +1404,9 @@ export async function runMultipleClipsPipelineFromStorage(
       await updateJob(jobId, {
         status: 'failed',
         error_message:
-          'Gemini no devolvió segmentos narrativos (sin el clip de VO). Revisa los clips o inténtalo de nuevo.',
+          'Claude no devolvió segmentos narrativos (sin el clip de VO). Revisa los clips o inténtalo de nuevo.',
       })
       return
-    }
-
-    // B3b — Limpiar archivos de Google
-    if (googleFileRefs.length > 0) {
-      try {
-        await cleanupMultipleGoogleFiles(googleFileRefs, jobId)
-      } catch (cleanupErr) {
-        console.warn(`[VideoV2Pipeline][${jobId}] Error limpiando Google Files (non-fatal): ${cleanupErr}`)
-      }
-      googleFileRefs = []
     }
 
     // B4 — Construir subtítulos (incluye bloque VO + overlays manuales si vinieron en el job)
@@ -1624,6 +1562,7 @@ export async function runMultipleClipsPipelineFromStorage(
       subtitleBlocks,
       analysis.sequence,
       brandConfig,
+      analysis.caption_highlights,
       brandMentionTimeSec
     )
 
@@ -1663,10 +1602,6 @@ export async function runMultipleClipsPipelineFromStorage(
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (multiple): ${msg}`)
     await updateJob(jobId, { status: 'failed', error_message: msg })
-  } finally {
-    if (googleFileRefs.length > 0) {
-      cleanupMultipleGoogleFiles(googleFileRefs, jobId).catch(() => {})
-    }
   }
 }
 
@@ -1723,6 +1658,16 @@ function coerceGeminiAnalysisFromUnknown(raw: unknown, jobId: string): GeminiSeg
     overall_strategy: String(o.overall_strategy ?? ''),
     ...(typeof o.voice_over_insert_after_count === 'number'
       ? { voice_over_insert_after_count: o.voice_over_insert_after_count }
+      : {}),
+    ...(Array.isArray(o.caption_highlights)
+      ? {
+          caption_highlights: (o.caption_highlights as AiHighlightPhrase[]).filter(
+            (h) => typeof h?.phrase === 'string'
+          ),
+        }
+      : {}),
+    ...(o.editor_usage && typeof o.editor_usage === 'object'
+      ? { editor_usage: o.editor_usage as ReelEditorUsage }
       : {}),
   }
 }
@@ -2399,7 +2344,8 @@ export async function rerunRenderForJob(
     jobId,
     subtitleBlocks,
     analysis.sequence,
-    brandConfig
+    brandConfig,
+    analysis.caption_highlights
   )
 
   const reelAudioVolumes = reelAudioVolumesFromPipelineMeta(sc)

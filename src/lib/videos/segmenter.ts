@@ -81,7 +81,7 @@ function buildSegment(words: RawWord[], clipIndex: number, segNumber: number): S
 
 /**
  * Un clip sin habla detectable: un solo "segmento" de 0 a duración completa del archivo,
- * para que Gemini pueda referenciar trims en visual_overlay (planos encima del audio).
+ * para que Claude pueda referenciar trims en visual_overlay (planos encima del audio).
  */
 export function buildVisualOnlyPlaceholderSegment(clipIndex: number, durationSec: number): Segment {
   const endMs = Math.round(durationSec * 1000)
@@ -182,7 +182,7 @@ export function refineSpokenSegmentsForOneClip(
   return segs
 }
 
-// ─── Formato humano del mapa de segmentos para el prompt de Gemini ────────────
+// ─── Formato humano del mapa de segmentos para el prompt de Claude ────────────
 
 export function formatSegmentMapForPrompt(segments: Segment[]): string {
   return segments

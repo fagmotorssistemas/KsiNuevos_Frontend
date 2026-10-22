@@ -54,7 +54,7 @@ export function buildScriptGuidanceFromEscenas(escenas: GuionEscena[]): string {
       const d = e.dialogo?.trim()
       const p = e.texto_pantalla?.trim()
       // Las comillas permiten que extractQuotedDialoguesFromScript las recoja
-      // como scriptDialogueLines para la lista priorizada de Gemini.
+      // como scriptDialogueLines para la lista priorizada de Claude.
       if (d && p) return `Escena ${e.esc} — Diálogo: "${d}"\nTexto en pantalla: ${p}`
       if (d) return `Escena ${e.esc} — "${d}"`
       if (p) return `Escena ${e.esc} — Pantalla: ${p}`
@@ -182,13 +182,13 @@ export async function resolveAndLinkVideoScriptForJob(
     return null
   }
 
-  // Guardamos video_script_id + script_text para guiar a Gemini
+  // Guardamos video_script_id + script_text para guiar a Claude
   const guidance = buildScriptGuidanceFromEscenas(resolved.escenas)
   const updatePayload: Record<string, unknown> = { video_script_id: resolved.scriptId }
   if (guidance.length > 0) {
     updatePayload.script_text = guidance
     console.log(
-      `[VideoScriptResolve][${jobId}] Guía de guión enviada a Gemini (${guidance.length} chars, score=${resolved.score.toFixed(3)})`
+      `[VideoScriptResolve][${jobId}] Guía de guión enviada a Claude (${guidance.length} chars, score=${resolved.score.toFixed(3)})`
     )
   }
 

@@ -31,7 +31,7 @@ function estimatedRemainingLabel(status: VideoJob['status'], progressPct: number
 const STEPS = [
   { key: 'uploading', label: 'Subida', description: 'Subiendo video a Storage...', icon: Upload },
   { key: 'transcribing', label: 'Audio + Visual', description: 'Transcribiendo audio y preparando análisis visual en paralelo...', icon: Mic2 },
-  { key: 'analyzing', label: 'Análisis IA', description: 'Gemini analizando el video y seleccionando los mejores momentos...', icon: Brain },
+  { key: 'analyzing', label: 'Análisis IA', description: 'Claude seleccionando los mejores momentos...', icon: Brain },
   { key: 'rendering', label: 'Renderizado', description: 'Shotstack está generando el Reel (esta etapa suele tardar varios minutos)...', icon: Clapperboard },
   { key: 'completed', label: 'Listo', description: 'Tu video está listo', icon: CheckCircle2 },
 ]

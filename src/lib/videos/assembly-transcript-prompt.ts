@@ -1,6 +1,6 @@
 import type { Segment } from './segmenter'
 
-/** Resumen por clip del texto transcrito (AssemblyAI → segmentos) para el prompt de Gemini. */
+/** Resumen por clip del texto transcrito (AssemblyAI → segmentos) para el prompt de Claude. */
 export function formatAssemblyTranscriptDumpForPrompt(allSegments: Segment[]): string {
   const byClip = new Map<number, Segment[]>()
   for (const s of allSegments) {

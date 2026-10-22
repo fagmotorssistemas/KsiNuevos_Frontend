@@ -13,7 +13,7 @@ export interface CanonicalVehicleMeta {
   year: string
 }
 
-/** Metadatos guardados en selected_clips al iniciar el job (antes del análisis Gemini). */
+/** Metadatos guardados en selected_clips al iniciar el job (antes del análisis Claude). */
 export interface VideoJobPipelineInputMeta {
   _v2_pipeline_input: true
   /** Si se omitió, el pipeline clasifica cada clip solo con AssemblyAI. */
@@ -29,7 +29,7 @@ export interface VideoJobPipelineInputMeta {
   clipOrientationsByPath?: Record<string, ClipOrientationMeta>
   /**
    * Índice del clip cuyo audio completo va como voz en off (audio-only).
-   * Gemini arma solo la secuencia narrativa sin este clip.
+   * Claude arma solo la secuencia narrativa sin este clip.
    */
   voiceOverBaseClipIndex?: number | null
   /**
@@ -53,7 +53,7 @@ export interface VideoJobPipelineInputMeta {
   manualIntroClipIndices?: number[] | null
   /**
    * Orden manual de clips en el Reel (permutación de índices elegibles: no VO ni planos reservados sobre VO).
-   * El pipeline reagrupa los cortes de Gemini en ese orden; el resto (cortes, subtítulos, música) sigue igual.
+   * El pipeline reagrupa los cortes de Claude en ese orden; el resto (cortes, subtítulos, música) sigue igual.
    */
   manualClipOrderIndices?: number[] | null
   /**
@@ -61,7 +61,7 @@ export interface VideoJobPipelineInputMeta {
    * el recorte automático por duración (~35 s). Útil cuando el reel debe usar todos los clips ordenados.
    */
   forceAllManualOrderClips?: boolean | null
-  /** Marca, modelo y año exactos del inventario (o captura manual) para contexto en Gemini. */
+  /** Marca, modelo y año exactos del inventario (o captura manual) para contexto en Claude. */
   canonicalVehicle?: CanonicalVehicleMeta | null
   /** ID inventario (`inventoryoracle.id`) para detectar `video_scripts` del mismo vehículo. */
   vehicleId?: string | null
@@ -198,7 +198,7 @@ export function normalizeClipDurationsInput(
   })
 }
 
-/** Índice de clip base voz en off (opcional). null/omitido = flujo automático con Gemini. */
+/** Índice de clip base voz en off (opcional). null/omitido = flujo automático con Claude. */
 export function normalizeVoiceOverBaseClipIndex(raw: unknown, clipCount: number): number | undefined {
   if (raw === null || raw === undefined) return undefined
   const n = typeof raw === 'number' ? raw : Number(raw)

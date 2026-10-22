@@ -3,7 +3,7 @@ import type { SequenceItem } from '@/lib/videos/segmenter'
 import { applyVideoJobEditorPatch, getVideoJobEditorState } from '@/lib/videos/pipeline'
 
 /**
- * GET — estado para el editor manual: subtítulos (auto vs efectivo), límites de trim por segment_id, análisis Gemini.
+ * GET — estado para el editor manual: subtítulos (auto vs efectivo), límites de trim por segment_id, análisis IA.
  * PATCH — guarda `subtitle_blocks_override` y/o `sequence` (cortes) sin re-transcribir.
  */
 export async function GET(

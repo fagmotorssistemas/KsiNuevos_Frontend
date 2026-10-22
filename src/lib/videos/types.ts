@@ -1,3 +1,4 @@
+import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
 import type { SequenceItem } from './segmenter'
 
 export type { VideoClipKind, VideoJobPipelineInputMeta } from './clip-config'
@@ -56,6 +57,10 @@ export interface GeminiSegmentAnalysisResult {
   overall_strategy: string
   /** Modo VO manual: cortes narrativos antes del bloque de audio completo + B-roll. */
   voice_over_insert_after_count?: number
+  /** Frases a destacar en subtítulos elegidas por Claude (el re-render las reutiliza sin otra llamada). */
+  caption_highlights?: AiHighlightPhrase[]
+  /** Tokens y costo aproximado de la llamada a Claude que armó el montaje. */
+  editor_usage?: ReelEditorUsage
 }
 
 export type GeminiAnalysis =
@@ -99,7 +104,7 @@ export interface VideoJob {
   music_track_url: string | null
   /** Ruta en Storage del PDF de guion opcional. */
   script_pdf_path?: string | null
-  /** Texto extraído del PDF para Gemini (guía no estricta). */
+  /** Texto extraído del PDF para Claude (guía no estricta). */
   script_text?: string | null
   selected_clips: GeminiClip[] | null
   /** Mapa de segmentos (AssemblyAI + post-proceso); útil para re-render y depuración. */

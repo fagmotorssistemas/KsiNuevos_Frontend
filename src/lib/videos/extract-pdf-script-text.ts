@@ -1,4 +1,4 @@
-/** Límite de caracteres guardados en DB / enviados a Gemini (evita prompts enormes). */
+/** Límite de caracteres guardados en DB / enviados a Claude (evita prompts enormes). */
 export const SCRIPT_TEXT_MAX_CHARS = 32000
 
 /**

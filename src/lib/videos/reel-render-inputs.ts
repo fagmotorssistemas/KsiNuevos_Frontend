@@ -17,7 +17,7 @@ export interface VoiceOverIntroRenderInput {
   brollClipIndicesInFileOrder: number[]
   /** Duración de cada archivo (misma longitud que clipUrls). */
   clipFileDurationsSec: (number | null)[]
-  /** Cuántos segmentos narrativos van antes de este bloque (lo decide Gemini). */
+  /** Cuántos segmentos narrativos van antes de este bloque (lo decide Claude). */
   insertAfterSegmentCount: number
   /** Opcional; en render se recalcula desde `sequence` + `insertAfterSegmentCount`. */
   timelineStartSec?: number
