@@ -31,6 +31,8 @@
     "@types/node": "^22.20.5",
     "@types/react": "19.2.18",
     "@types/three": "0.186.0",
+    "gsap": "3.14.2",
+    "hyperframes": "0.8.185",
     "opentype.js": "2.0.0",
     "tsx": "4.23.15",
     "typescript": "5.9.3"
