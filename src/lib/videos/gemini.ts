@@ -1115,6 +1115,7 @@ function buildEditorPrompt(opts: {
   assemblyTranscriptDump: string | null
   canonicalVehicle: CanonicalVehicleMeta | null
   manualClipOrderIndices: number[] | null
+  previousReelsBlock: string | null
 }): string {
   const manual = opts.manualVoiceOverBaseClipIndex != null || opts.manualVoiceOverFromExternalAudio
   const brollBlock = !manual && opts.clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
@@ -1132,7 +1133,7 @@ function buildEditorPrompt(opts: {
 ${framesNote}
 
 ${opts.clipCatalog}
-${buildCanonicalVehicleBlock(opts.canonicalVehicle)}${buildAssemblyTranscriptBlock(opts.assemblyTranscriptDump)}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}MAPA DE SEGMENTOS (los únicos cortes posibles):
+${buildCanonicalVehicleBlock(opts.canonicalVehicle)}${opts.previousReelsBlock ?? ''}${buildAssemblyTranscriptBlock(opts.assemblyTranscriptDump)}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}MAPA DE SEGMENTOS (los únicos cortes posibles):
 
 ${opts.formattedSegmentMap}
 
@@ -1163,6 +1164,8 @@ export interface AnalyzeSegmentsOptions {
   manualIntroClipIndices?: number[]
   /** Orden macro de clips en el Reel (permutación de índices narrativos). */
   manualClipOrderIndices?: number[]
+  /** Resumen de reels anteriores del mismo vehículo (previous-reels.ts) para que Claude no los repita. */
+  previousReelsBlock?: string
 }
 
 /**
@@ -1225,6 +1228,7 @@ export async function analyzeSegments(
     assemblyTranscriptDump: options?.assemblyTranscriptDump ?? null,
     canonicalVehicle: options?.canonicalVehicle ?? null,
     manualClipOrderIndices: options?.manualClipOrderIndices ?? null,
+    previousReelsBlock: options?.previousReelsBlock ?? null,
   })
 
   const plan = await requestReelEditPlan(prompt, frames, jobId)

@@ -81,6 +81,7 @@ import { renderSegmentsV2, getShotstackRenderStatus, resolveCaptionStyleVersion 
 import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from './audio-balance'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
 import { extractSegmentFrames } from './segment-frames'
+import { buildPreviousReelsBlock } from './previous-reels'
 import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
 
 /**
@@ -246,6 +247,23 @@ function tryAnalysisFromGuionDialogues(
       `${analysis.total_duration.toFixed(1)}s — ${analysis.sequence.map((s) => `clip${s.clip_index}`).join(' → ')}`
   )
   return analysis
+}
+
+/**
+ * Vincula el job a un vehículo del inventario según lo dicho en el audio (si aún no lo está).
+ * Corre antes del análisis para que Claude pueda ver los reels anteriores de ese auto.
+ */
+async function linkInventoryVehicleBeforeAnalysis(jobId: string, segments: Segment[]): Promise<void> {
+  const supabase = getServiceClient()
+  const { data: metaRow } = await supabase
+    .from('video_jobs_v2')
+    .select('selected_clips, video_script_id')
+    .eq('id', jobId)
+    .single()
+  if (metaRow?.video_script_id) return
+  await resolveAndApplyVehicleFromAssemblyForJob(supabase, jobId, segments, {
+    vehicleIdHint: vehicleIdFromPipelineMeta(metaRow?.selected_clips),
+  })
 }
 
 async function finalizeSubtitleBlocksForJob(
@@ -667,6 +685,8 @@ export async function runSingleVideoPipelineFromStorage(
       progress_percentage: 55,
     })
 
+    await linkInventoryVehicleBeforeAnalysis(jobId, segments)
+
     const formattedMap = formatSegmentMapForPrompt(segments)
     const ctx = await fetchJobGeminiContext(jobId)
     const scriptGuidanceText = ctx.scriptText ?? undefined
@@ -677,6 +697,8 @@ export async function runSingleVideoPipelineFromStorage(
     if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
     geminiOpts.assemblyTranscriptDump = assemblyDump
     if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
+    const previousReelsSingle = await buildPreviousReelsBlock(getServiceClient(), jobId)
+    if (previousReelsSingle) geminiOpts.previousReelsBlock = previousReelsSingle
 
     const escenasSingle = await loadGuionEscenasForPipelineJob(jobId, segments)
     let analysis =
@@ -738,15 +760,6 @@ export async function runSingleVideoPipelineFromStorage(
         .single()
       clipRotateAngles = clipRotateAnglesFromPipelineMeta(metaRow?.selected_clips, [storagePath])
       captionStyleVersion = captionStyleVersionFromPipelineMeta(metaRow?.selected_clips)
-      if (!metaRow?.video_script_id) {
-        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-        await resolveAndApplyVehicleFromAssemblyForJob(
-          supabaseInv,
-          jobId,
-          segments,
-          { vehicleIdHint: vId }
-        )
-      }
     }
 
     const brandConfig = await loadBrandConfigForJob(jobId)
@@ -1291,6 +1304,10 @@ export async function runMultipleClipsPipelineFromStorage(
     const escenasMulti = await loadGuionEscenasForPipelineJob(jobId, allSegments)
     const excludeForGuion = [...excludeFromNarrative]
 
+    if (escenasMulti.length === 0) await linkInventoryVehicleBeforeAnalysis(jobId, allSegments)
+    const previousReelsMulti = await buildPreviousReelsBlock(getServiceClient(), jobId)
+    if (previousReelsMulti) geminiOpts.previousReelsBlock = previousReelsMulti
+
     const forceChecklist =
       ctx.forceAllManualOrderClips === true &&
       normClipOrder != null &&
@@ -1484,15 +1501,6 @@ export async function runMultipleClipsPipelineFromStorage(
         .single()
       clipRotateAngles = clipRotateAnglesFromPipelineMeta(metaRow?.selected_clips, paths)
       captionStyleVersion = captionStyleVersionFromPipelineMeta(metaRow?.selected_clips)
-      if (escenasMulti.length === 0 && !metaRow?.video_script_id) {
-        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-        await resolveAndApplyVehicleFromAssemblyForJob(
-          supabaseInv,
-          jobId,
-          allSegments,
-          { vehicleIdHint: vId }
-        )
-      }
     }
 
     const brandConfig = await loadBrandConfigForJob(jobId)
