@@ -11,9 +11,8 @@ import type { Brand, TimelineGraphic } from '../../plan/types'
 import { zoomProgress, zoomTransform } from '../../reel/zoom'
 import { formatSpecNumber } from '../../theme'
 import { clamp, splitEmphasis, useEnterExit } from '../anim'
-import { CornerFrame, FONT_CAPTION, FONT_LABEL, MudSplatter, OFFROAD, RustyText, Tag, TreadBackground } from './kit'
+import { CornerFrame, FONT_CAPTION, FONT_LABEL, MudSplatter, OFFROAD, RustyText, Tag, TargetRing, TreadBackground } from './kit'
 
-const captionShadow = '0 5px 0 rgba(0,0,0,0.35), 0 8px 22px rgba(0,0,0,0.8)'
 const graphicNumber = (g: TimelineGraphic) => Number(g.id.match(/\d+/)?.[0] ?? 1)
 
 /** Entrada sobria: 0 → 1 en `dur` cuadros, frenando al final, sin pasarse. */
@@ -53,7 +52,7 @@ export const OffroadHook: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
         }}
       >
         {words.map(({ word, strong }, i) => (
-          <span key={i} style={{ fontFamily: FONT_CAPTION, fontSize: 100, lineHeight: 1.05, textTransform: 'uppercase', color: strong ? OFFROAD.accent : '#fff', textShadow: captionShadow }}>
+          <span key={i} style={{ fontFamily: FONT_CAPTION, fontSize: 100, lineHeight: 1.05, textTransform: 'uppercase', color: strong ? OFFROAD.accent : '#fff' }}>
             {word}
           </span>
         ))}
@@ -73,7 +72,7 @@ export const OffroadTitle: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
       <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 45%)' }} />
       <div style={{ position: 'absolute', top: height * 0.09, left: 70, right: 70 }}>
         {g.subtext ? (
-          <div style={{ fontFamily: FONT_LABEL, fontWeight: 900, fontSize: 40, letterSpacing: 10, color: '#fff', textTransform: 'uppercase', textShadow: captionShadow, marginBottom: 14, ...rise(reveal(frame, 0, 7), 16) }}>
+          <div style={{ fontFamily: FONT_LABEL, fontWeight: 900, fontSize: 40, letterSpacing: 10, color: '#fff', textTransform: 'uppercase', marginBottom: 14, ...rise(reveal(frame, 0, 7), 16) }}>
             {g.subtext}
           </div>
         ) : null}
@@ -155,8 +154,10 @@ export const OffroadCounter: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
 export const OffroadCallout: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
   const { frame, fps, durationInFrames, width, height, exit } = useEnterExit(8)
   const z = g.zoom ? zoomTransform(g.zoom, zoomProgress(frame, durationInFrames, fps), frame / durationInFrames) : null
-  const label = `K-SI SCAN · ${String(graphicNumber(g)).padStart(2, '0')}`
+  const label = `${String(graphicNumber(g)).padStart(2, '0')} K-SI SCAN`
   const box = z ? { x: z.point.x, y: z.point.y, w: Math.max(240, z.radius * 2.3), h: Math.max(220, z.radius * 2.1) } : null
+  // Objeto chico en el cuadro original (botón, palanca): anillo que gira; grande (pantalla, tablero): esquinas.
+  const small = g.sourceFocus ? Math.max(g.sourceFocus.w, g.sourceFocus.h) < 0.2 : false
   // Del lado que eligió la línea de tiempo (cardAtTop): los subtítulos van al lado contrario.
   const above = g.cardAtTop ?? true
   const tagTop = box
@@ -170,7 +171,8 @@ export const OffroadCallout: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
 
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
-      {box ? <CornerFrame x={box.x} y={box.y} w={box.w} h={box.h} progress={reveal(frame, 4, 9)} /> : null}
+      {box && z && small ? <TargetRing x={box.x} y={box.y} r={Math.min(230, Math.max(80, z.radius * 1.1))} progress={reveal(frame, 4, 9)} frame={frame} /> : null}
+      {box && !small ? <CornerFrame x={box.x} y={box.y} w={box.w} h={box.h} progress={reveal(frame, 4, 9)} /> : null}
       <div style={{ position: 'absolute', top: tagTop, left: tagCenter, transform: 'translateX(-50%)' }}>
         <Tag text={g.text} label={label} progress={reveal(frame, 8, 10)} size={46} />
       </div>
@@ -189,10 +191,10 @@ export const OffroadList: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
       <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 55%)' }} />
       <div style={{ position: 'absolute', top: height * 0.1, left: 80, right: 80, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 40 }}>
         {g.type === 'feature_list' && g.text ? (
-          <div style={{ fontFamily: FONT_CAPTION, fontSize: 70, color: '#fff', textTransform: 'uppercase', textShadow: captionShadow, ...rise(reveal(frame, 0, 7), 16) }}>{g.text}</div>
+          <div style={{ fontFamily: FONT_CAPTION, fontSize: 70, color: '#fff', textTransform: 'uppercase', ...rise(reveal(frame, 0, 7), 16) }}>{g.text}</div>
         ) : null}
         {items.map((item, i) => (
-          <Tag key={i} text={item} progress={reveal(frame, 6 + i * per, 10)} size={48} style={{ marginLeft: i % 2 ? 110 : 0 }} />
+          <Tag key={i} text={item} progress={reveal(frame, 6 + i * per, 10)} size={48} hazard={g.type === 'spec_chips'} style={{ marginLeft: i % 2 ? 110 : 0 }} />
         ))}
       </div>
     </AbsoluteFill>
@@ -212,7 +214,7 @@ export const OffroadCta: React.FC<{ g: TimelineGraphic; brand: Brand }> = ({ g, 
       <AbsoluteFill style={{ opacity: reveal(local, 0, 6) }}>
         <TreadBackground frame={frame} width={width} height={height} />
         <AbsoluteFill style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 40 }}>
-          <Tag text="K-SI NUEVOS" progress={reveal(local, 2, 12)} size={88} />
+          <Tag text="K-SI NUEVOS" progress={reveal(local, 2, 12)} size={88} hazard />
           <div style={{ fontFamily: FONT_LABEL, fontWeight: 900, fontSize: 44, letterSpacing: 12, color: OFFROAD.accent, ...rise(reveal(local, 10, 8), 16) }}>CUENCA · ECUADOR</div>
           <div style={{ fontFamily: FONT_LABEL, fontWeight: 900, fontSize: 48, letterSpacing: 2, color: '#fff', ...rise(reveal(local, 14, 8), 16) }}>COMENTA “{keyword}”</div>
           <div style={{ marginTop: 30, background: 'rgba(255,255,255,0.94)', borderRadius: 16, padding: '12px 20px', ...rise(reveal(local, 18, 8), 16) }}>

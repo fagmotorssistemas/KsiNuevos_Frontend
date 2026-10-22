@@ -92,12 +92,27 @@ const Corners: React.FC<{ size: number; inset: number; color: string; stroke: nu
   </>
 )
 
+/** Franja de peligro naranja y negra (cinta de obra), como debajo de "TRABAJO EXIGENTE" en la referencia. */
+const Hazard: React.FC<{ progress: number; height: number }> = ({ progress, height }) => (
+  <div
+    style={{
+      marginTop: 10,
+      height,
+      borderRadius: 4,
+      background: `repeating-linear-gradient(-45deg, ${OFFROAD.accent} 0 ${height * 0.7}px, #111 ${height * 0.7}px ${height * 1.4}px)`,
+      clipPath: `inset(0 ${100 - progress * 100}% 0 0)`,
+      border: '2px solid rgba(0,0,0,0.6)',
+    }}
+  />
+)
+
 /** Etiqueta tipo escáner: caja oscura con borde naranja que se despliega de izquierda a derecha y se queda quieta. */
-export const Tag: React.FC<{ text: string; label?: string; progress: number; size?: number; style?: React.CSSProperties }> = ({
+export const Tag: React.FC<{ text: string; label?: string; progress: number; size?: number; hazard?: boolean; style?: React.CSSProperties }> = ({
   text,
   label,
   progress,
   size = 44,
+  hazard = false,
   style,
 }) => {
   const reveal = interpolate(progress, [0, 1], [0, 100], clamp)
@@ -113,7 +128,6 @@ export const Tag: React.FC<{ text: string; label?: string; progress: number; siz
             color: OFFROAD.accent,
             marginBottom: 8,
             opacity: interpolate(progress, [0.4, 1], [0, 1], clamp),
-            textShadow: '0 2px 6px rgba(0,0,0,0.8)',
           }}
         >
           {label}
@@ -146,7 +160,34 @@ export const Tag: React.FC<{ text: string; label?: string; progress: number; siz
           {text}
         </span>
       </div>
+      {hazard ? <Hazard progress={interpolate(progress, [0.3, 1], [0, 1], clamp)} height={Math.round(size * 0.32)} /> : null}
     </div>
+  )
+}
+
+/**
+ * Mira sobre un objeto chico (un botón del volante, la palanca): anillo fino con un arco naranja que gira, como
+ * el escáner de la referencia. Para objetos grandes (la pantalla) se usan las esquinas (CornerFrame).
+ */
+export const TargetRing: React.FC<{ x: number; y: number; r: number; progress: number; frame: number }> = ({ x, y, r, progress, frame }) => {
+  const rr = r * interpolate(progress, [0, 1], [1.35, 1], clamp)
+  const arcLen = Math.PI * 2 * rr * 0.32
+  return (
+    <svg style={{ position: 'absolute', inset: 0, overflow: 'visible', opacity: interpolate(progress, [0, 0.4], [0, 1], clamp) }} width="100%" height="100%">
+      <circle cx={x} cy={y} r={rr} fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth={4} />
+      <circle
+        cx={x}
+        cy={y}
+        r={rr + 12}
+        fill="none"
+        stroke={OFFROAD.accent}
+        strokeWidth={9}
+        strokeLinecap="round"
+        strokeDasharray={`${arcLen} ${Math.PI * 2 * (rr + 12)}`}
+        transform={`rotate(${(frame * 6) % 360} ${x} ${y})`}
+      />
+      <circle cx={x} cy={y} r={7} fill={OFFROAD.accent} />
+    </svg>
   )
 }
 

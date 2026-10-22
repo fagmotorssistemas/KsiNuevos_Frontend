@@ -177,9 +177,10 @@ const music = values.music
 const { props, warnings } = buildReelProps(plan, clips, transcripts, {
   brand: { logoSrc: 'ksi-logo.png', accent: '#E81C2A', highlight: '#FFE94A', whatsapp: values.whatsapp },
   music,
-  // Las camionetas llevan su propio diseño (formato de referencia de la Ranger). Todos en modo cine.
+  // Camionetas: su propio diseño offroad completo (formato de referencia de la Ranger: títulos rústicos en 3D, escáner
+  // K-SI SCAN, barro, caja de comentario y firma con huella de llanta). Todos los demás: modo cine.
   theme: vehicle.categoria === 'camioneta' ? 'offroad' : 'ksi',
-  look: 'cine',
+  look: vehicle.categoria === 'camioneta' ? 'social' : 'cine',
 })
 for (const w of warnings) console.warn(`[plan] ${w}`)
 fs.writeFileSync(path.join(outDir, 'props.json'), JSON.stringify(props, null, 2))

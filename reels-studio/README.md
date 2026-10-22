@@ -18,7 +18,13 @@ clips crudos del asesor
    └─ Remotion ──► MP4 vertical 1080×1920 con gráficos 3D, subtítulos karaoke y efectos de sonido
 ```
 
-**Modo cine** (por defecto, `look: cine`): franjas negras que se abren como un telón en el primer
+**Camionetas** (`theme: offroad`, `look: social`; lo decide `run.ts` cuando el tipo es camioneta): diseño offroad
+completo como la referencia de la Ranger: títulos naranjas rústicos con relieve 3D, barro en el gancho, etiquetas
+"K-SI SCAN" con esquinas (objetos grandes) o una mira que gira (objetos chicos) sobre lo que se dice y se ve, fichas con
+cinta de peligro, personitas para los ocupantes, caja de comentario que se escribe sola y firma con huella de llanta.
+Piezas en `src/graphics/offroad/`.
+
+**Modo cine** (todos los demás, `look: cine`): franjas negras que se abren como un telón en el primer
 instante, grano de película, viñeta, color de cine, logo en blanco dentro de la franja, títulos grandes
 con textos pequeños muy espaciados y líneas finas de acento. Piezas en `src/graphics/cine/`. El lenguaje
 anterior (rebotes, cajas de color) sigue disponible con `render-plan.ts --look social`.

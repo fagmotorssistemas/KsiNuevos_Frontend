@@ -68,6 +68,9 @@ const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand; theme: ReelTheme; lo
         return <OffroadList g={g} />
       case 'cta_end':
         return <OffroadCta g={g} brand={brand} />
+      case 'sticker':
+        // La encuesta y la cápsula sobrias (si el director pone alguna); las de redes no van con este diseño.
+        return <CineSticker g={g} theme={theme} />
       default:
         break
     }
@@ -210,14 +213,16 @@ export const Reel: React.FC<ReelProps> = (props) => {
         <CineFrame logoSrc={props.brand.logoSrc} showLogo={!ctaActive} watermark={props.watermark} />
       ) : (
         <>
-        {/* Logo fijo arriba y barra de progreso (retención) */}
-        {!ctaActive ? (
+        {/* Logo fijo arriba y barra de progreso (retención). Camionetas: pantalla limpia, como la referencia; la marca
+            va en la firma final. */}
+        {!ctaActive && theme !== 'offroad' ? (
           <div style={{ position: 'absolute', top: 70, right: 56, background: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: '10px 16px' }}>
             <Img src={staticFile(props.brand.logoSrc)} style={{ width: 190, display: 'block' }} />
           </div>
         ) : null}
         <div
           style={{
+            display: theme === 'offroad' ? 'none' : undefined,
             position: 'absolute',
             top: 0,
             left: 0,
