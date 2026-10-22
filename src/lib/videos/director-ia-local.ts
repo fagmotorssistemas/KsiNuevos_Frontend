@@ -93,6 +93,22 @@ async function recentCaptionStyles(jobId: string): Promise<string[]> {
   return ((data ?? []) as Array<{ captionStyle: string | null }>).flatMap((r) => (r.captionStyle ? [r.captionStyle] : []))
 }
 
+/** Códigos del inventario que no son parte del nombre comercial: aire, puertas, tracción, caja, cabina, cilindrada. */
+const INVENTORY_CODE = /^(a\/?c|\d+p|4x[24]|[24]wd|awd|fwd|t\/?a|t\/?m|at|mt|cvt|cd|cs|\d+\.\d+l?|\d+l)$/i
+
+/**
+ * Nombre comercial a partir del modelo del inventario ("escape titanium ac 2.0 5p 4x2 ta" → "Escape Titanium").
+ * Con los códigos, AssemblyAI los "escucha" en el audio y Claude tiene que limpiarlos de la transcripción.
+ */
+export function commercialModel(raw: string): string {
+  const words = raw.trim().split(/\s+/).filter((w) => w && !INVENTORY_CODE.test(w.replace(/[,;]$/, '')))
+  // Con números ("RAV4", "CX-5", "L200") o siglas de versión sin vocales ("XL", "XLT", "GLS"): en mayúsculas.
+  const name = words
+    .map((w) => (/\d/.test(w) || (w.length <= 4 && !/[aeiou]/i.test(w)) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ')
+  return name || raw.trim()
+}
+
 async function vehicleInfoForJob(job: JobRow): Promise<Record<string, unknown>> {
   const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined
   const vehicleId = job.inventory_vehicle_id ?? meta?.vehicleId ?? null
@@ -103,9 +119,10 @@ async function vehicleInfoForJob(job: JobRow): Promise<Record<string, unknown>> 
       .eq('id', vehicleId)
       .maybeSingle()
     if (data?.brand && data.model) {
+      const modelo = commercialModel(data.model)
       return {
         marca: data.brand,
-        modelo: data.model,
+        modelo,
         anio: data.year ?? undefined,
         version: data.version ?? undefined,
         motor: data.engine_displacement ?? undefined,
@@ -115,6 +132,7 @@ async function vehicleInfoForJob(job: JobRow): Promise<Record<string, unknown>> 
         color: data.color ?? undefined,
         categoria: vehicleCategory(data.type_body),
         carroceria: data.type_body ?? undefined,
+        notas: modelo.toLowerCase() !== data.model.trim().toLowerCase() ? `Modelo en el inventario: ${data.model}` : undefined,
       }
     }
   }
@@ -122,7 +140,8 @@ async function vehicleInfoForJob(job: JobRow): Promise<Record<string, unknown>> 
   const words = (job.job_name ?? '').trim().split(/\s+/).filter(Boolean)
   return {
     marca: canon?.brand?.trim() || words[0] || 'Vehículo',
-    modelo: canon?.model?.trim() || words.slice(1).join(' ') || words[0] || 'seminuevo',
+    // El nombre del trabajo suele terminar en el año ("Ford Escape Titanium Ac 2.0 5p 4x2 Ta 2023").
+    modelo: canon?.model?.trim() || commercialModel(words.slice(1).filter((w, i, a) => !(i === a.length - 1 && /^(19|20)\d{2}$/.test(w))).join(' ')) || words[0] || 'seminuevo',
     anio: canon?.year?.trim() || undefined,
     notas: job.job_name ? `Nombre del trabajo: ${job.job_name}` : undefined,
   }
