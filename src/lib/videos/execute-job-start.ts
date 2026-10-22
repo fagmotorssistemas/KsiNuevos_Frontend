@@ -2,7 +2,9 @@
  * Lógica compartida de POST /jobs/start y POST /jobs/[jobId]/finalize
  */
 
+import { after } from 'next/server'
 import { dispatchVideoPipelineRun } from '@/lib/videos/dispatch-pipeline-run'
+import { directorIaUnavailableReason, runDirectorIaForJob } from '@/lib/videos/director-ia-local'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/types/supabase'
 import type { VideoClipKind } from '@/lib/videos/clip-config'
@@ -66,6 +68,8 @@ export interface StartJobBody {
   clipOrientations?: ClipOrientationMeta[] | null
   /** Estilo de subtítulos: v1 (alterna) o v2 (karaoke fijo abajo). */
   captionStyleVersion?: 'v1' | 'v2' | null
+  /** Director IA (beta, solo local): reels-studio arma el Reel en vez del pipeline Shotstack. */
+  directorIa?: boolean | null
 }
 
 export type JobStartResult =
@@ -97,10 +101,17 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     reelDialogueVolume: reelDialogueVolumeRaw,
     clipOrientations: clipOrientationsRaw,
     captionStyleVersion: captionStyleVersionRaw,
+    directorIa: directorIaRaw,
   } = body
 
   if (!jobId || !paths?.length) {
     return { ok: false, error: 'jobId y paths son requeridos', status: 400 }
+  }
+
+  const directorIa = directorIaRaw === true
+  if (directorIa) {
+    const unavailable = directorIaUnavailableReason()
+    if (unavailable) return { ok: false, error: unavailable, status: 400 }
   }
 
   let clipKinds: VideoClipKind[] | undefined
@@ -388,7 +399,8 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     reelMusicVolume !== undefined ||
     reelDialogueVolume !== undefined ||
     resolvedOrientations !== undefined ||
-    captionStyleVersion !== undefined
+    captionStyleVersion !== undefined ||
+    directorIa
       ? ({
           _v2_pipeline_input: true,
           ...(clipKinds !== undefined ? { clipKinds } : {}),
@@ -408,6 +420,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
           ...(reelMusicVolume !== undefined ? { reelMusicVolume } : {}),
           ...(reelDialogueVolume !== undefined ? { reelDialogueVolume } : {}),
           ...(captionStyleVersion ? { captionStyleVersion } : {}),
+          ...(directorIa ? { directorIa: true } : {}),
           ...(resolvedOrientations
             ? {
                 clipOrientations: resolvedOrientations,
@@ -441,7 +454,12 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     return { ok: false, error: `Error actualizando job: ${updateError.message}`, status: 500 }
   }
 
-  schedulePipelineRun(jobId)
+  if (directorIa) {
+    // Local: corre en este mismo proceso (sin el límite de 5 min de /run-pipeline).
+    after(() => runDirectorIaForJob(jobId))
+  } else {
+    schedulePipelineRun(jobId)
+  }
 
   return { ok: true, jobId, status: 'processing' }
 }

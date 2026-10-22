@@ -13,6 +13,7 @@ import {
   runMultipleClipsPipelineFromStorage,
   runSingleVideoPipelineFromStorage,
 } from '@/lib/videos/pipeline'
+import { runDirectorIaForJob } from '@/lib/videos/director-ia-local'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -66,6 +67,10 @@ export async function runPipelineForJob(jobId: string, opts?: { force?: boolean 
   }
 
   const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined
+  if (meta?.directorIa) {
+    await runDirectorIaForJob(jobId)
+    return
+  }
   const signedUrls = await Promise.all(paths.map((path) => getSignedUrlForPath(path)))
   const files = paths.map((path, i) => ({
     buffer: Buffer.alloc(0),

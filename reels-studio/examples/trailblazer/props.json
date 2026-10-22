@@ -1,0 +1,753 @@
+{
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "durationInFrames": 1022,
+  "cuts": [
+    {
+      "clipId": "clip1",
+      "src": "demo/clip1.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 0,
+      "durationInFrames": 147,
+      "trimStartSec": 0,
+      "trimEndSec": 4.9,
+      "role": "gancho",
+      "transitionIn": "zoom",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": 0,
+      "jump": 0,
+      "punches": []
+    },
+    {
+      "clipId": "clip2",
+      "src": "demo/clip2.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 147,
+      "durationInFrames": 163,
+      "trimStartSec": 0,
+      "trimEndSec": 5.433333,
+      "role": "presentacion",
+      "transitionIn": "flash",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": 1,
+      "jump": 0,
+      "punches": []
+    },
+    {
+      "clipId": "clip3",
+      "src": "demo/clip3.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 310,
+      "durationInFrames": 206,
+      "trimStartSec": 0,
+      "trimEndSec": 6.882000000000001,
+      "role": "caracteristica",
+      "transitionIn": "whip",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": 2,
+      "jump": 0,
+      "punches": []
+    },
+    {
+      "clipId": "clip3",
+      "src": "demo/clip3.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 516,
+      "durationInFrames": 79,
+      "trimStartSec": 7.172,
+      "trimEndSec": 9.8,
+      "role": "caracteristica",
+      "transitionIn": "corte",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": 2,
+      "jump": 1,
+      "punches": []
+    },
+    {
+      "clipId": "clip4",
+      "src": "demo/clip4.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 595,
+      "durationInFrames": 95,
+      "trimStartSec": 0,
+      "trimEndSec": 3.166667,
+      "role": "dato",
+      "transitionIn": "zoom",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": 3,
+      "jump": 0,
+      "punches": []
+    },
+    {
+      "clipId": "clip5",
+      "src": "demo/clip5.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 690,
+      "durationInFrames": 79,
+      "trimStartSec": 0.6,
+      "trimEndSec": 3.233333,
+      "role": "confianza",
+      "transitionIn": "flash",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": 4,
+      "jump": 0,
+      "punches": []
+    },
+    {
+      "clipId": "clip6",
+      "src": "demo/clip6.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 769,
+      "durationInFrames": 133,
+      "trimStartSec": 0.186,
+      "trimEndSec": 4.633333,
+      "role": "caracteristica",
+      "transitionIn": "whip",
+      "captionPlacement": "abajo",
+      "zooms": [
+        {
+          "focus": {
+            "cx": 442.8,
+            "cy": 940.8,
+            "w": 453.59999999999997,
+            "h": 307.2
+          },
+          "focusEnd": {
+            "cx": 324,
+            "cy": 940.8,
+            "w": 453.59999999999997,
+            "h": 307.2
+          },
+          "scale": 1.3,
+          "target": {
+            "x": 421.2,
+            "y": 768
+          },
+          "fromFrame": 50,
+          "durationInFrames": 72
+        }
+      ],
+      "take": 5,
+      "jump": 0,
+      "punches": []
+    },
+    {
+      "clipId": "clip7",
+      "src": "demo/clip7.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 902,
+      "durationInFrames": 94,
+      "trimStartSec": 0,
+      "trimEndSec": 3.126009,
+      "role": "cierre",
+      "transitionIn": "zoom",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": 6,
+      "jump": 0,
+      "punches": []
+    }
+  ],
+  "tailFrames": 26,
+  "graphics": [
+    {
+      "type": "hook_text",
+      "text": "¿Buscas un *SUV* a *diésel*?",
+      "subtext": "No cometas este error",
+      "reason": "Gancho en los primeros 2 segundos.",
+      "id": "g1-hook_text",
+      "fromFrame": 0,
+      "durationInFrames": 66
+    },
+    {
+      "type": "title_3d",
+      "text": "Trailblazer",
+      "subtext": "Chevrolet",
+      "badge": "2019",
+      "reason": "Dice la marca y el modelo.",
+      "id": "g2-title_3d",
+      "fromFrame": 149,
+      "durationInFrames": 66
+    },
+    {
+      "type": "spec_chips",
+      "text": "",
+      "items": [
+        "2.8 diésel",
+        "Automático",
+        "4x4",
+        "5 puertas"
+      ],
+      "placement": "arriba",
+      "reason": "Enumera versión, caja, tracción y puertas.",
+      "id": "g3-spec_chips",
+      "fromFrame": 223,
+      "durationInFrames": 102
+    },
+    {
+      "type": "feature_list",
+      "text": "3 cosas que mandan",
+      "items": [
+        "Motor grande",
+        "Estructura sólida",
+        "Buen torque"
+      ],
+      "reason": "Dice 'hay tres cosas que mandan' y las enumera.",
+      "id": "g4-feature_list",
+      "fromFrame": 343,
+      "durationInFrames": 123
+    },
+    {
+      "type": "sticker",
+      "text": "Guárdalo para tu *viaje*",
+      "icon": "guardar",
+      "placement": "arriba",
+      "reason": "Invita a guardar justo cuando habla de viajes largos.",
+      "id": "s8-sticker",
+      "fromFrame": 484,
+      "durationInFrames": 66
+    },
+    {
+      "type": "spec_counter",
+      "text": "Kilometraje",
+      "subtext": "Perfectos para su año",
+      "icon": "velocimetro",
+      "value": 128000,
+      "unit": "km",
+      "reason": "Dice el kilometraje sobre el tablero.",
+      "id": "g5-spec_counter",
+      "fromFrame": 597,
+      "durationInFrames": 87
+    },
+    {
+      "type": "sticker",
+      "text": "Mándaselo a tu *pana*",
+      "icon": "compartir",
+      "placement": "arriba",
+      "reason": "Compartir a mitad del Reel, antes del señalador.",
+      "id": "s9-sticker",
+      "fromFrame": 727,
+      "durationInFrames": 60
+    },
+    {
+      "type": "feature_callout",
+      "text": "Volante multifunción",
+      "subtext": "Controles al alcance de tu mano",
+      "icon": "volante",
+      "reason": "Se ve el volante con mandos mientras habla del estado real.",
+      "id": "g6-feature_callout",
+      "fromFrame": 819,
+      "durationInFrames": 72,
+      "cardAtTop": false,
+      "zoom": {
+        "focus": {
+          "cx": 442.8,
+          "cy": 940.8,
+          "w": 453.59999999999997,
+          "h": 307.2
+        },
+        "focusEnd": {
+          "cx": 324,
+          "cy": 940.8,
+          "w": 453.59999999999997,
+          "h": 307.2
+        },
+        "scale": 1.3,
+        "target": {
+          "x": 421.2,
+          "y": 768
+        }
+      },
+      "sourceFocus": {
+        "x": 0.2,
+        "y": 0.41,
+        "w": 0.42,
+        "h": 0.16
+      }
+    },
+    {
+      "type": "cta_end",
+      "text": "Trailblazer",
+      "subtext": "y te enviamos toda la información",
+      "reason": "Cierre: comenta la palabra clave.",
+      "id": "g7-cta_end",
+      "fromFrame": 914,
+      "durationInFrames": 108
+    }
+  ],
+  "captions": [
+    {
+      "fromFrame": 69,
+      "toFrame": 94,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "y",
+          "fromFrame": 69,
+          "toFrame": 74,
+          "emphasis": false
+        },
+        {
+          "text": "solo",
+          "fromFrame": 74,
+          "toFrame": 83,
+          "emphasis": false
+        },
+        {
+          "text": "miras",
+          "fromFrame": 83,
+          "toFrame": 94,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 94,
+      "toFrame": 122,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "el",
+          "fromFrame": 94,
+          "toFrame": 100,
+          "emphasis": false
+        },
+        {
+          "text": "diseño",
+          "fromFrame": 100,
+          "toFrame": 113,
+          "emphasis": false
+        },
+        {
+          "text": "pues",
+          "fromFrame": 113,
+          "toFrame": 122,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 122,
+      "toFrame": 147,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "ya",
+          "fromFrame": 122,
+          "toFrame": 128,
+          "emphasis": false
+        },
+        {
+          "text": "empezaste",
+          "fromFrame": 128,
+          "toFrame": 141,
+          "emphasis": false
+        },
+        {
+          "text": "mal.",
+          "fromFrame": 141,
+          "toFrame": 147,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 222,
+      "toFrame": 268,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "automático",
+          "fromFrame": 222,
+          "toFrame": 256,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 313,
+      "toFrame": 335,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "este",
+          "fromFrame": 313,
+          "toFrame": 321,
+          "emphasis": false
+        },
+        {
+          "text": "tipo",
+          "fromFrame": 321,
+          "toFrame": 330,
+          "emphasis": false
+        },
+        {
+          "text": "de",
+          "fromFrame": 330,
+          "toFrame": 335,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 335,
+      "toFrame": 354,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "SUV",
+          "fromFrame": 335,
+          "toFrame": 342,
+          "emphasis": true
+        }
+      ]
+    },
+    {
+      "fromFrame": 485,
+      "toFrame": 507,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "define",
+          "fromFrame": 485,
+          "toFrame": 496,
+          "emphasis": false
+        },
+        {
+          "text": "si",
+          "fromFrame": 496,
+          "toFrame": 502,
+          "emphasis": false
+        },
+        {
+          "text": "un",
+          "fromFrame": 502,
+          "toFrame": 507,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 507,
+      "toFrame": 516,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "SUV",
+          "fromFrame": 507,
+          "toFrame": 514,
+          "emphasis": true
+        }
+      ]
+    },
+    {
+      "fromFrame": 518,
+      "toFrame": 544,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "sirve",
+          "fromFrame": 518,
+          "toFrame": 527,
+          "emphasis": false
+        },
+        {
+          "text": "para",
+          "fromFrame": 527,
+          "toFrame": 534,
+          "emphasis": false
+        },
+        {
+          "text": "viajes",
+          "fromFrame": 534,
+          "toFrame": 544,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 544,
+      "toFrame": 555,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "largos,",
+          "fromFrame": 544,
+          "toFrame": 555,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 555,
+      "toFrame": 577,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "para",
+          "fromFrame": 555,
+          "toFrame": 562,
+          "emphasis": false
+        },
+        {
+          "text": "familia",
+          "fromFrame": 562,
+          "toFrame": 573,
+          "emphasis": false
+        },
+        {
+          "text": "o",
+          "fromFrame": 573,
+          "toFrame": 577,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 577,
+      "toFrame": 595,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "para",
+          "fromFrame": 577,
+          "toFrame": 584,
+          "emphasis": false
+        },
+        {
+          "text": "cariño",
+          "fromFrame": 584,
+          "toFrame": 594,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 692,
+      "toFrame": 730,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "con",
+          "fromFrame": 692,
+          "toFrame": 702,
+          "emphasis": false
+        },
+        {
+          "text": "la",
+          "fromFrame": 702,
+          "toFrame": 710,
+          "emphasis": false
+        },
+        {
+          "text": "esencia",
+          "fromFrame": 710,
+          "toFrame": 730,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 730,
+      "toFrame": 769,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "propia",
+          "fromFrame": 730,
+          "toFrame": 747,
+          "emphasis": false
+        },
+        {
+          "text": "de",
+          "fromFrame": 747,
+          "toFrame": 756,
+          "emphasis": false
+        },
+        {
+          "text": "Chevrolet.",
+          "fromFrame": 756,
+          "toFrame": 769,
+          "emphasis": true
+        }
+      ]
+    },
+    {
+      "fromFrame": 771,
+      "toFrame": 794,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "En",
+          "fromFrame": 771,
+          "toFrame": 776,
+          "emphasis": false
+        },
+        {
+          "text": "K-Si",
+          "fromFrame": 776,
+          "toFrame": 784,
+          "emphasis": true
+        },
+        {
+          "text": "Nuevos",
+          "fromFrame": 784,
+          "toFrame": 794,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 794,
+      "toFrame": 827,
+      "placement": "arriba",
+      "words": [
+        {
+          "text": "seleccionamos",
+          "fromFrame": 794,
+          "toFrame": 819,
+          "emphasis": false
+        },
+        {
+          "text": "SUV",
+          "fromFrame": 819,
+          "toFrame": 827,
+          "emphasis": true
+        }
+      ]
+    },
+    {
+      "fromFrame": 827,
+      "toFrame": 855,
+      "placement": "arriba",
+      "words": [
+        {
+          "text": "por",
+          "fromFrame": 827,
+          "toFrame": 836,
+          "emphasis": false
+        },
+        {
+          "text": "su",
+          "fromFrame": 836,
+          "toFrame": 842,
+          "emphasis": false
+        },
+        {
+          "text": "estado",
+          "fromFrame": 842,
+          "toFrame": 855,
+          "emphasis": true
+        }
+      ]
+    },
+    {
+      "fromFrame": 855,
+      "toFrame": 877,
+      "placement": "arriba",
+      "words": [
+        {
+          "text": "real",
+          "fromFrame": 855,
+          "toFrame": 865,
+          "emphasis": true
+        },
+        {
+          "text": "y",
+          "fromFrame": 865,
+          "toFrame": 870,
+          "emphasis": false
+        },
+        {
+          "text": "no",
+          "fromFrame": 870,
+          "toFrame": 877,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 877,
+      "toFrame": 902,
+      "placement": "arriba",
+      "words": [
+        {
+          "text": "por",
+          "fromFrame": 877,
+          "toFrame": 885,
+          "emphasis": false
+        },
+        {
+          "text": "vitrina.",
+          "fromFrame": 885,
+          "toFrame": 902,
+          "emphasis": false
+        }
+      ]
+    }
+  ],
+  "captionStyle": "impacto",
+  "theme": "ksi",
+  "look": "cine",
+  "sfx": [
+    {
+      "frame": 0,
+      "kind": "hit"
+    },
+    {
+      "frame": 149,
+      "kind": "hit"
+    },
+    {
+      "frame": 223,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 343,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 484,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 597,
+      "kind": "hit"
+    },
+    {
+      "frame": 727,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 819,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 914,
+      "kind": "hit"
+    }
+  ],
+  "brand": {
+    "logoSrc": "ksi-logo.png",
+    "accent": "#E81C2A",
+    "highlight": "#FFE94A"
+  },
+  "music": null,
+  "watermark": "",
+  "videoEngine": "media"
+}

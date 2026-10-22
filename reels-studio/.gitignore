@@ -1,0 +1,10 @@
+node_modules
+out
+# Clips de cada trabajo (pipeline/run.ts los copia aquí para que Remotion los sirva).
+public/jobs
+# Clips de la muestra: se generan con examples/trailblazer/make-clips.sh
+public/demo/*.mp4
+
+# Claves locales (ver .env.example)
+.env
+!.env.example

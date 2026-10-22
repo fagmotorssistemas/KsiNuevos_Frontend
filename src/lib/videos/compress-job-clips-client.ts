@@ -90,11 +90,32 @@ export async function compressJobClipsOrThrow(
   }
 
   if (errors.length > 0) {
+    console.error(`[compress-clips][${jobId}] Nest no optimizó ningún clip:`, errors)
     throw new Error(
-      'No se pudieron optimizar los clips en el servidor (backend de video no disponible o compresión fallida). ' +
+      `No se pudieron optimizar los clips en el servidor: ${describeNestErrors(errors)}. ` +
         'Comprime los videos manualmente o contacta soporte antes de continuar.'
     )
   }
 
   return { count: 0, remappedPaths: paths, pathRemap }
+}
+
+/**
+ * Motivo legible del fallo. Nest devuelve "ruta: mensaje" por clip; si la ruta llega sola, el
+ * backend ni siquiera respondió (sin BACKEND_INTERNAL_URL/INTERNAL_API_SECRET o error al iniciar).
+ */
+function describeNestErrors(errors: string[]): string {
+  if (errors.some((e) => /rotate sigue/i.test(e))) {
+    return 'el backend de video no pudo enderezar los clips verticales (videos girados del iPhone)'
+  }
+  if (errors.some((e) => /^Timeout/i.test(e))) {
+    return 'el backend de video tardó más de 5 minutos'
+  }
+  // Solo rutas, sin texto de error: la llamada a Nest ni siquiera arrancó.
+  if (errors.every((e) => !/\s/.test(e))) {
+    return 'el backend de video no respondió (revisa BACKEND_INTERNAL_URL, INTERNAL_API_SECRET y que el servidor esté arriba)'
+  }
+  const first = errors.find((e) => /\s/.test(e))!
+  const sep = first.indexOf(': ')
+  return (sep >= 0 ? first.slice(sep + 2) : first).slice(0, 160)
 }

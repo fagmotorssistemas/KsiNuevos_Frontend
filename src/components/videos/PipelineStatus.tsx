@@ -128,6 +128,14 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
         <p className="text-sm text-red-600 max-w-md bg-red-50 px-4 py-3 rounded-xl">
           {job.error_message ?? 'Ocurrió un error desconocido'}
         </p>
+        <button
+          type="button"
+          onClick={() => void handleResumePipeline()}
+          disabled={isResuming}
+          className="text-sm font-semibold px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50"
+        >
+          {isResuming ? 'Reintentando…' : 'Reintentar'}
+        </button>
       </div>
     )
   }
