@@ -1,5 +1,6 @@
 import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
 import type { VisualPlan } from './visual-plan'
+import type { MotionPlan } from '@/lib/reels-motion/motion-plan'
 import type { SequenceItem } from './segmenter'
 
 export type { VideoClipKind, VideoJobPipelineInputMeta } from './clip-config'
@@ -62,6 +63,8 @@ export interface GeminiSegmentAnalysisResult {
   caption_highlights?: AiHighlightPhrase[]
   /** Estilo visual elegido por Claude; el re-render lo reutiliza. */
   visual_plan?: VisualPlan
+  /** Plan de gráficos de un Reel Motion 3D; el re-render lo reutiliza. */
+  motion_plan?: MotionPlan
   /** Tokens y costo aproximado de la llamada a Claude que armó el montaje. */
   editor_usage?: ReelEditorUsage
 }

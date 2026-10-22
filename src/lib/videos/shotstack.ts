@@ -789,7 +789,7 @@ function buildTransmissionGearSfxTrack(
   }
 }
 
-function resolveClipTransitionWhooshUrl(): string {
+export function resolveClipTransitionWhooshUrl(): string {
   return (
     process.env.VIDEO_SFX_WHOOSH_URL?.trim() ||
     process.env.VIDEO_SFX_TRANSITION_WHOOSH_URL?.trim() ||
@@ -969,7 +969,7 @@ function buildHookSfxTrack(plan: VisualPlan): ShotstackTrack | null {
   }
 }
 
-function resolveBrandTitlePopSfxUrl(): string {
+export function resolveBrandTitlePopSfxUrl(): string {
   return (
     process.env.VIDEO_SFX_BRAND_POP_URL?.trim() ||
     process.env.VIDEO_SFX_POP_URL?.trim() ||

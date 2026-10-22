@@ -73,7 +73,14 @@ export interface VideoJobPipelineInputMeta {
    * Si se omite (jobs viejos), el pipeline usa `VIDEO_CAPTION_STYLE_VERSION` o v1.
    */
   captionStyleVersion?: 'v1' | 'v2' | null
+  /**
+   * Motor de render elegido en el modal: Shotstack (por defecto) o Motion 3D (HyperFrames en esta máquina,
+   * con títulos 3D y gráficos animados; solo en local).
+   */
+  renderEngine?: ReelRenderEngine | null
 }
+
+export type ReelRenderEngine = 'shotstack' | 'motion'
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta {
   if (typeof x !== 'object' || x === null || !('_v2_pipeline_input' in x)) return false
@@ -102,8 +109,15 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     normalizeReelAudioVolume(o.reelMusicVolume) != null ||
     normalizeReelAudioVolume(o.reelDialogueVolume) != null ||
     o.captionStyleVersion === 'v1' ||
-    o.captionStyleVersion === 'v2'
+    o.captionStyleVersion === 'v2' ||
+    o.renderEngine === 'motion'
   )
+}
+
+/** Motor de render elegido en el modal (jobs viejos: Shotstack). */
+export function renderEngineFromPipelineMeta(selectedClips: unknown): ReelRenderEngine {
+  if (!selectedClips || typeof selectedClips !== 'object') return 'shotstack'
+  return (selectedClips as VideoJobPipelineInputMeta).renderEngine === 'motion' ? 'motion' : 'shotstack'
 }
 
 /** Lee la versión de captions elegida en el modal (si hay). */

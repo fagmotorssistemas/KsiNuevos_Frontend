@@ -66,6 +66,8 @@ export interface StartJobBody {
   clipOrientations?: ClipOrientationMeta[] | null
   /** Estilo de subtítulos: v1 (alterna) o v2 (karaoke fijo abajo). */
   captionStyleVersion?: 'v1' | 'v2' | null
+  /** Motor de render: shotstack (por defecto) o motion (Motion 3D local). */
+  renderEngine?: 'shotstack' | 'motion' | null
 }
 
 export type JobStartResult =
@@ -97,6 +99,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     reelDialogueVolume: reelDialogueVolumeRaw,
     clipOrientations: clipOrientationsRaw,
     captionStyleVersion: captionStyleVersionRaw,
+    renderEngine: renderEngineRaw,
   } = body
 
   if (!jobId || !paths?.length) {
@@ -318,6 +321,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     captionStyleVersionRaw === 'v1' || captionStyleVersionRaw === 'v2'
       ? captionStyleVersionRaw
       : undefined
+  const renderEngine = renderEngineRaw === 'motion' ? ('motion' as const) : undefined
 
   const supabase = getServiceClient()
 
@@ -388,7 +392,8 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     reelMusicVolume !== undefined ||
     reelDialogueVolume !== undefined ||
     resolvedOrientations !== undefined ||
-    captionStyleVersion !== undefined
+    captionStyleVersion !== undefined ||
+    renderEngine !== undefined
       ? ({
           _v2_pipeline_input: true,
           ...(clipKinds !== undefined ? { clipKinds } : {}),
@@ -408,6 +413,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
           ...(reelMusicVolume !== undefined ? { reelMusicVolume } : {}),
           ...(reelDialogueVolume !== undefined ? { reelDialogueVolume } : {}),
           ...(captionStyleVersion ? { captionStyleVersion } : {}),
+          ...(renderEngine ? { renderEngine } : {}),
           ...(resolvedOrientations
             ? {
                 clipOrientations: resolvedOrientations,

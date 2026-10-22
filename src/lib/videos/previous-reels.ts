@@ -8,6 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { isPipelineInputMeta } from './clip-config'
 import { normalizeVisualPlan } from './visual-plan'
+import { describeMotionPlan, normalizeMotionPlan } from '@/lib/reels-motion/motion-plan'
 
 const MAX_PREVIOUS_REELS = 3
 const MAX_CUTS_PER_REEL = 12
@@ -18,6 +19,7 @@ type StoredAnalysis = {
   overall_strategy?: unknown
   total_duration?: unknown
   visual_plan?: unknown
+  motion_plan?: unknown
 }
 
 type StoredSegment = { segment_id?: unknown; text?: unknown }
@@ -63,6 +65,8 @@ function describeReel(createdAt: string, analysis: StoredAnalysis, segmentMap: u
         `transiciones ${plan.transitions}, cámara ${plan.camera_motion}, paleta ${plan.palette}, filtro ${plan.color_filter}`
     )
   }
+  const motion = normalizeMotionPlan(analysis.motion_plan)
+  if (motion) lines.push(`  ${describeMotionPlan(motion)}`)
   return `Reel del ${createdAt.slice(0, 10)}${duration}${strategy}:\n${lines.join('\n')}`
 }
 

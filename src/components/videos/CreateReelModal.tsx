@@ -233,6 +233,13 @@ export function CreateReelModal({
   const [showBrandOverlays, setShowBrandOverlays] = useState(false)
   /** Estilo de subtítulos Shotstack: V2 lineal karaoke (default) o V1 clásico. */
   const [captionStyleVersion, setCaptionStyleVersion] = useState<'v1' | 'v2'>('v2')
+  /** Motor de render: Shotstack (siempre) o Motion 3D (títulos 3D; se renderiza en el servidor local). */
+  const [renderEngine, setRenderEngine] = useState<'shotstack' | 'motion'>('shotstack')
+  const [motionAvailable, setMotionAvailable] = useState(false)
+  useEffect(() => {
+    // Motion 3D necesita Chrome y varios minutos de CPU: por ahora solo con `npm run dev` en esta computadora.
+    setMotionAvailable(['localhost', '127.0.0.1'].includes(window.location.hostname))
+  }, [])
   const [vehicleLine1, setVehicleLine1] = useState('')
   const [vehicleLine2, setVehicleLine2] = useState('')
   const [vehicleLine3, setVehicleLine3] = useState('')
@@ -683,6 +690,7 @@ export function CreateReelModal({
       ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
       clipOrientations,
       captionStyleVersion,
+      ...(motionAvailable && renderEngine === 'motion' ? { renderEngine } : {}),
     }
 
     const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -913,6 +921,7 @@ export function CreateReelModal({
         ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
         clipOrientations,
         captionStyleVersion,
+        ...(motionAvailable && renderEngine === 'motion' ? { renderEngine } : {}),
       }
 
       const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -1598,39 +1607,79 @@ export function CreateReelModal({
               </p>
 
               <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
-                <div>
-                  <p className="text-sm font-semibold text-violet-950">Estilo de subtítulos</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCaptionStyleVersion('v2')}
-                      className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                        captionStyleVersion === 'v2'
-                          ? 'border-violet-500 bg-white ring-2 ring-violet-200'
-                          : 'border-gray-200 bg-white/70 hover:border-violet-200'
-                      }`}
-                    >
-                      <span className="block text-sm font-semibold text-gray-900">V2 · Karaoke</span>
-                      <span className="block text-xs text-gray-500 mt-0.5">
-                        Fijo abajo, palabra activa en rojo
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCaptionStyleVersion('v1')}
-                      className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                        captionStyleVersion === 'v1'
-                          ? 'border-violet-500 bg-white ring-2 ring-violet-200'
-                          : 'border-gray-200 bg-white/70 hover:border-violet-200'
-                      }`}
-                    >
-                      <span className="block text-sm font-semibold text-gray-900">V1 · Clásico</span>
-                      <span className="block text-xs text-gray-500 mt-0.5">
-                        Alterna posición y olas
-                      </span>
-                    </button>
+                {motionAvailable && (
+                  <div>
+                    <p className="text-sm font-semibold text-violet-950">Estilo del Reel</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRenderEngine('shotstack')}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          renderEngine === 'shotstack'
+                            ? 'border-violet-500 bg-white ring-2 ring-violet-200'
+                            : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-gray-900">Clásico</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">Shotstack, subtítulos y textos</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRenderEngine('motion')}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          renderEngine === 'motion'
+                            ? 'border-violet-500 bg-white ring-2 ring-violet-200'
+                            : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-gray-900">Motion 3D · beta</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">Títulos 3D, barro, K-SI SCAN</span>
+                      </button>
+                    </div>
+                    {renderEngine === 'motion' && (
+                      <p className="mt-2 text-xs text-gray-600 leading-relaxed">
+                        Claude decide los títulos 3D, placas, señalados y transiciones (formato camioneta). El video se
+                        renderiza en esta computadora y tarda unos minutos. No admite voz en off: si la activas, sale
+                        con el estilo clásico.
+                      </p>
+                    )}
                   </div>
-                </div>
+                )}
+                {(!motionAvailable || renderEngine === 'shotstack') && (
+                  <div>
+                    <p className="text-sm font-semibold text-violet-950">Estilo de subtítulos</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCaptionStyleVersion('v2')}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          captionStyleVersion === 'v2'
+                            ? 'border-violet-500 bg-white ring-2 ring-violet-200'
+                            : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-gray-900">V2 · Karaoke</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">
+                          Fijo abajo, palabra activa en rojo
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCaptionStyleVersion('v1')}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          captionStyleVersion === 'v1'
+                            ? 'border-violet-500 bg-white ring-2 ring-violet-200'
+                            : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-gray-900">V1 · Clásico</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">
+                          Alterna posición y olas
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <MusicSelector

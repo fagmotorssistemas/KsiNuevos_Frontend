@@ -64,6 +64,7 @@ The accounting/cartera module also calls a separate backend at `NEXT_PUBLIC_API_
 ### External Integrations
 
 - **Videos** — AssemblyAI (transcripción), Claude (montaje, `src/lib/videos/claude-editor.ts`), Shotstack (render); rutas en `src/app/api/videos/` y UI en `src/app/marketing/videos/`
+- **Motion 3D (beta, solo local)** — opción "Estilo del Reel" en Crear Reel: Claude devuelve `motion_plan` (`src/lib/reels-motion/motion-plan.ts`), `composer.ts` arma la composición HyperFrames con el runtime de `reels-motion/runtime/` (three.js + GSAP) y `render-motion-reel.ts` la renderiza con el CLI `hyperframes` (necesita ffmpeg; la primera vez descarga Chrome). En Vercel cae a Shotstack. Referencia del formato: `docs/reels/referencia-camioneta.md`
 - **Claude API** (`ANTHROPIC_API_KEY`; opcionales `CLAUDE_REELS_MODEL`, por defecto `claude-opus-5-5`, y `CLAUDE_REELS_EFFORT` = `low` | `medium` | `high`, por defecto `medium`) — una llamada por Reel; el log muestra tokens y costo aproximado
 - **Google Gemini AI** (`GEMINI_API_KEY`) — content analysis in marketing/scraper modules, Noticiero and social captions for Videos
 - **Custom accounting backend** (`NEXT_PUBLIC_API_URL`) — separate service for financial operations

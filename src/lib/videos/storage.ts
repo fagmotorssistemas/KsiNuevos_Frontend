@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto'
+import { readFile } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { MUSIC_TRACKS_BUCKET } from '@/lib/videos/music-upload-shared'
@@ -210,6 +211,19 @@ export async function downloadShotstackVideoAndStoreFinalReel(
   })
   if (error) throw new Error(`Error subiendo reel a Storage: ${error.message}`)
 
+  return finalReelPublicUrl(jobId)
+}
+
+/** Sube un MP4 renderizado en esta máquina (Motion 3D) como reel final y devuelve su URL pública. */
+export async function uploadFinalReelFile(localPath: string, jobId: string): Promise<string> {
+  const supabase = getServiceClient()
+  const buffer = await readFile(localPath)
+  const { error } = await supabase.storage.from(REELS_FINAL_BUCKET).upload(finalReelStoragePath(jobId), buffer, {
+    contentType: 'video/mp4',
+    upsert: true,
+    cacheControl: '31536000',
+  })
+  if (error) throw new Error(`Error subiendo reel a Storage: ${error.message}`)
   return finalReelPublicUrl(jobId)
 }
 

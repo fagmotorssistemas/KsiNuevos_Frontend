@@ -12,6 +12,7 @@ import { defaultClipKinds } from './clip-config'
 import { requestReelEditPlan, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
 import type { SegmentFrame } from './segment-frames'
 import type { VisualPlan } from './visual-plan'
+import { MOTION_PLAN_PROMPT_BLOCK, type MotionPlan } from '@/lib/reels-motion/motion-plan'
 
 // ─── Tipos de respuesta ──────────────────────────────────────────────────────
 
@@ -28,6 +29,8 @@ export interface GeminiSegmentAnalysis {
   caption_highlights?: AiHighlightPhrase[]
   /** Estilo visual del Reel (gancho, tarjetas, transiciones…) que dibuja shotstack.ts. */
   visual_plan?: VisualPlan
+  /** Plan de gráficos de un Reel Motion 3D (lo dibuja reels-motion/composer.ts). */
+  motion_plan?: MotionPlan
   /** Tokens y costo aproximado de la llamada a Claude. */
   editor_usage?: ReelEditorUsage
 }
@@ -1129,6 +1132,7 @@ function buildEditorPrompt(opts: {
   canonicalVehicle: CanonicalVehicleMeta | null
   manualClipOrderIndices: number[] | null
   previousReelsBlock: string | null
+  motion: boolean
 }): string {
   const manual = opts.manualVoiceOverBaseClipIndex != null || opts.manualVoiceOverFromExternalAudio
   const brollBlock = !manual && opts.clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
@@ -1153,7 +1157,7 @@ ${opts.formattedSegmentMap}
 REGLAS TÉCNICAS:
 - Usa solo segment_id del mapa, cada uno una vez, con trim_start = start_s y trim_end = end_s (el sistema ajusta los bordes para no cortar palabras).
 ${brollBlock}${voBlock}
-${VISUAL_PLAN_BLOCK}
+${opts.motion ? MOTION_PLAN_PROMPT_BLOCK : VISUAL_PLAN_BLOCK}
 ${buildOutputBlock(manual)}`
 }
 
@@ -1180,6 +1184,8 @@ export interface AnalyzeSegmentsOptions {
   manualClipOrderIndices?: number[]
   /** Resumen de reels anteriores del mismo vehículo (previous-reels.ts) para que Claude no los repita. */
   previousReelsBlock?: string
+  /** Reel Motion 3D: Claude devuelve el plan de gráficos (motion_plan) en vez del plan visual de Shotstack. */
+  motion?: boolean
 }
 
 /**
@@ -1243,9 +1249,10 @@ export async function analyzeSegments(
     canonicalVehicle: options?.canonicalVehicle ?? null,
     manualClipOrderIndices: options?.manualClipOrderIndices ?? null,
     previousReelsBlock: options?.previousReelsBlock ?? null,
+    motion: options?.motion === true,
   })
 
-  const plan = await requestReelEditPlan(prompt, frames, jobId)
+  const plan = await requestReelEditPlan(prompt, frames, jobId, { motion: options?.motion === true })
   const validated = validateSequence(
     {
       sequence: plan.sequence,
@@ -1269,6 +1276,7 @@ export async function analyzeSegments(
     ...validated,
     caption_highlights: plan.caption_highlights,
     ...(plan.visual_plan ? { visual_plan: plan.visual_plan } : {}),
+    ...(plan.motion_plan ? { motion_plan: plan.motion_plan } : {}),
     editor_usage: plan.usage,
   }
 }

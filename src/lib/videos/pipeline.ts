@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType, GeminiSegmentAnalysisResult, VideoJobStatus } from './types'
-import { getSignedUrlForPath, resolveFinalReelVideoUrl, resolveVoiceOverAudioUrl } from './storage'
+import {
+  getSignedUrlForPath,
+  resolveFinalReelVideoUrl,
+  resolveVoiceOverAudioUrl,
+  uploadFinalReelFile,
+} from './storage'
 import { buildSrtFromRawWords, transcribeVideoV2, type RawWord } from './assemblyai'
 import {
   extractEngineDisplacementFromVehicleText,
@@ -23,9 +28,10 @@ import {
   sumSequenceItemsDurationSec,
 } from './segmenter'
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
-import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
+import type { VideoClipKind, CanonicalVehicleMeta, ReelRenderEngine } from './clip-config'
 import {
   defaultClipKinds,
+  renderEngineFromPipelineMeta,
   isPipelineInputMeta,
   clipRotateAnglesFromPipelineMeta,
   captionStyleVersionFromPipelineMeta,
@@ -83,6 +89,14 @@ import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-br
 import { extractSegmentFrames } from './segment-frames'
 import { buildPreviousReelsBlock } from './previous-reels'
 import { normalizeVisualPlan } from './visual-plan'
+import { defaultMotionPlan, normalizeMotionPlan } from '@/lib/reels-motion/motion-plan'
+import {
+  isMotionRenderAvailable,
+  motionWorkDir,
+  renderMotionReel,
+  type MotionRenderInput,
+} from '@/lib/reels-motion/render-motion-reel'
+import fs from 'node:fs'
 import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
 
 /**
@@ -113,6 +127,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
   manualIntroClipIndicesRaw?: number[]
   manualClipOrderIndicesRaw?: number[]
   forceAllManualOrderClips?: boolean
+  renderEngine?: ReelRenderEngine
 }> {
   const supabase = getServiceClient()
   const { data, error } = await supabase
@@ -151,7 +166,52 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
     manualIntroClipIndicesRaw,
     manualClipOrderIndicesRaw,
     forceAllManualOrderClips,
+    renderEngine: renderEngineFromPipelineMeta(sc),
   }
+}
+
+/** Motion 3D solo si se eligió en el modal, este servidor puede renderizarlo y no hay voz en off. */
+function resolveMotionMode(jobId: string, engine: ReelRenderEngine | undefined, hasVoiceOver: boolean): boolean {
+  if (engine !== 'motion') return false
+  if (hasVoiceOver) {
+    console.warn(`[VideoV2Pipeline][${jobId}][Motion3D] Motion 3D aún no admite voz en off: se usa Shotstack`)
+    return false
+  }
+  if (!isMotionRenderAvailable()) {
+    console.warn(`[VideoV2Pipeline][${jobId}][Motion3D] Motion 3D solo corre en local (npm run dev): se usa Shotstack`)
+    return false
+  }
+  return true
+}
+
+/** Lanza el render Motion 3D en segundo plano (varios minutos) y cierra el job al terminar. */
+function startMotionRender(jobId: string, input: Omit<MotionRenderInput, 'jobId'>) {
+  setImmediate(async () => {
+    try {
+      const file = await renderMotionReel({ jobId, ...input }, (pct, step) =>
+        updateJob(jobId, { progress_percentage: pct, current_step: step }).catch(() => {})
+      )
+      await updateJob(jobId, { progress_percentage: 98, current_step: 'Motion 3D: subiendo el video…' })
+      const url = await uploadFinalReelFile(file, jobId)
+      await updateJob(jobId, {
+        status: 'completed',
+        final_video_url: url,
+        progress_percentage: 100,
+        current_step: 'Video listo (Motion 3D)',
+      })
+      fs.rmSync(motionWorkDir(jobId), { recursive: true, force: true })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(
+        `[VideoV2Pipeline][${jobId}][Motion3D] Error: ${msg} (archivos en ${motionWorkDir(jobId)})`
+      )
+      await updateJob(jobId, {
+        status: 'failed',
+        error_message: `Motion 3D: ${msg}`.slice(0, 900),
+        current_step: 'Error en renderizado',
+      }).catch(() => {})
+    }
+  })
 }
 
 async function loadGuionEscenasForPipelineJob(
@@ -698,6 +758,8 @@ export async function runSingleVideoPipelineFromStorage(
     if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
     geminiOpts.assemblyTranscriptDump = assemblyDump
     if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
+    const motionSingle = resolveMotionMode(jobId, ctx.renderEngine, false)
+    if (motionSingle) geminiOpts.motion = true
     const previousReelsSingle = await buildPreviousReelsBlock(getServiceClient(), jobId)
     if (previousReelsSingle) geminiOpts.previousReelsBlock = previousReelsSingle
 
@@ -738,11 +800,13 @@ export async function runSingleVideoPipelineFromStorage(
     await updateJob(jobId, { adjusted_srt: adjustedSrt, progress_percentage: 75 })
     console.log(`[VideoV2Pipeline][${jobId}][A4] ${subtitleBlocks.length} bloques de subtítulos generados`)
 
-    // A5 — Renderizado Shotstack
-    console.log(`[VideoV2Pipeline][${jobId}][A5] Enviando a Shotstack`)
+    // A5 — Render (Shotstack, o Motion 3D en esta máquina)
+    console.log(`[VideoV2Pipeline][${jobId}][A5] ${motionSingle ? 'Render Motion 3D' : 'Enviando a Shotstack'}`)
     await updateJob(jobId, {
       status: 'rendering',
-      current_step: 'Shotstack está renderizando el Reel en alta calidad...',
+      current_step: motionSingle
+        ? 'Motion 3D: preparando el render…'
+        : 'Shotstack está renderizando el Reel en alta calidad...',
       progress_percentage: 80,
     })
 
@@ -778,7 +842,8 @@ export async function runSingleVideoPipelineFromStorage(
 
     let comentaMentionTimeSecA: number | undefined
     let comentaOverlayTextA: string | undefined
-    {
+    // En Motion 3D el "comenta" lo dibuja la caja de comentario del plan: los subtítulos quedan completos.
+    if (!motionSingle) {
       const comenta = applyComentaOverlayFromAssembly(
         subtitleBlocks,
         analysis.sequence,
@@ -799,6 +864,22 @@ export async function runSingleVideoPipelineFromStorage(
       analysis.caption_highlights,
       brandMentionTimeSec
     )
+
+    if (motionSingle) {
+      startMotionRender(jobId, {
+        sequence: analysis.sequence,
+        segments,
+        subtitleBlocks,
+        plan: analysis.motion_plan ?? defaultMotionPlan(ctx.canonicalVehicle?.model),
+        highlightPhrases: (analysis.caption_highlights ?? []).map((h) => h.phrase),
+        clipUrls,
+        musicUrl: musicTrackUrl,
+        musicTrimStartSecOverride,
+        ...reelAudioVolumes,
+      })
+      console.log(`[VideoV2Pipeline][${jobId}] Pipeline A completado. Render Motion 3D en curso.`)
+      return
+    }
 
     const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl, undefined, {
       musicTrimStartSecOverride,
@@ -1284,6 +1365,12 @@ export async function runMultipleClipsPipelineFromStorage(
     }
 
     const geminiOpts: AnalyzeSegmentsOptions = {}
+    const motionMulti = resolveMotionMode(
+      jobId,
+      ctx.renderEngine,
+      voiceOverBaseClipIndex != null || voiceOverAudioPath != null
+    )
+    if (motionMulti) geminiOpts.motion = true
     if (voiceOverBaseClipIndex != null) {
       geminiOpts.manualVoiceOverBaseClipIndex = voiceOverBaseClipIndex
     }
@@ -1473,11 +1560,13 @@ export async function runMultipleClipsPipelineFromStorage(
     })
     console.log(`[VideoV2Pipeline][${jobId}][B4] ${subtitleBlocks.length} bloques de subtítulos generados`)
 
-    // B5 — Renderizado Shotstack
-    console.log(`[VideoV2Pipeline][${jobId}][B5] Enviando a Shotstack`)
+    // B5 — Render (Shotstack, o Motion 3D en esta máquina)
+    console.log(`[VideoV2Pipeline][${jobId}][B5] ${motionMulti ? 'Render Motion 3D' : 'Enviando a Shotstack'}`)
     await updateJob(jobId, {
       status: 'rendering',
-      current_step: 'Shotstack está renderizando el Reel en alta calidad...',
+      current_step: motionMulti
+        ? 'Motion 3D: preparando el render…'
+        : 'Shotstack está renderizando el Reel en alta calidad...',
       progress_percentage: 80,
     })
 
@@ -1550,7 +1639,8 @@ export async function runMultipleClipsPipelineFromStorage(
       captionStyleVersion
     )
 
-    {
+    // En Motion 3D el "comenta" lo dibuja la caja de comentario del plan: los subtítulos quedan completos.
+    if (!motionMulti) {
       const comenta = applyComentaOverlayFromAssembly(
         subtitleBlocks,
         analysis.sequence,
@@ -1575,6 +1665,22 @@ export async function runMultipleClipsPipelineFromStorage(
       analysis.caption_highlights,
       brandMentionTimeSec
     )
+
+    if (motionMulti) {
+      startMotionRender(jobId, {
+        sequence: analysis.sequence,
+        segments: allSegments,
+        subtitleBlocks,
+        plan: analysis.motion_plan ?? defaultMotionPlan(ctx.canonicalVehicle?.model),
+        highlightPhrases: (analysis.caption_highlights ?? []).map((h) => h.phrase),
+        clipUrls: freshClipUrls,
+        musicUrl: musicTrackUrl,
+        musicTrimStartSecOverride,
+        ...reelAudioVolumes,
+      })
+      console.log(`[VideoV2Pipeline][${jobId}] Pipeline B completado. Render Motion 3D en curso.`)
+      return
+    }
 
     const renderId = await renderSegmentsV2(
       jobId,
@@ -1681,6 +1787,7 @@ function coerceGeminiAnalysisFromUnknown(raw: unknown, jobId: string): GeminiSeg
       ? { editor_usage: o.editor_usage as ReelEditorUsage }
       : {}),
     ...(normalizeVisualPlan(o.visual_plan) ? { visual_plan: normalizeVisualPlan(o.visual_plan)! } : {}),
+    ...(normalizeMotionPlan(o.motion_plan) ? { motion_plan: normalizeMotionPlan(o.motion_plan)! } : {}),
   }
 }
 
@@ -2296,6 +2403,8 @@ export async function rerunRenderForJob(
   }
 
   const analysisToStore = geminiAnalysisPatch ?? analysis
+  // Un Reel Motion 3D se vuelve a renderizar en Motion 3D (con el mismo plan de gráficos), si este servidor puede.
+  const motionRerun = resolveMotionMode(jobId, renderEngineFromPipelineMeta(sc), voiceOverIntro != null)
 
   await updateJob(jobId, {
     gemini_analysis: analysisToStore,
@@ -2313,7 +2422,7 @@ export async function rerunRenderForJob(
         }
       : {}),
     status: 'rendering',
-    current_step: 'Re-render: enviando a Shotstack…',
+    current_step: motionRerun ? 'Re-render: preparando Motion 3D…' : 'Re-render: enviando a Shotstack…',
     progress_percentage: 82,
     final_video_url: null,
     final_video_duration: null,
@@ -2339,7 +2448,7 @@ export async function rerunRenderForJob(
 
   let comentaMentionTimeSecRerun: number | undefined
   let comentaOverlayTextRerun: string | undefined
-  {
+  if (!motionRerun) {
     const comenta = applyComentaOverlayFromAssembly(
       subtitleBlocks,
       analysis.sequence,
@@ -2361,6 +2470,22 @@ export async function rerunRenderForJob(
   )
 
   const reelAudioVolumes = reelAudioVolumesFromPipelineMeta(sc)
+
+  if (motionRerun) {
+    startMotionRender(jobId, {
+      sequence: analysis.sequence,
+      segments: allSegments,
+      subtitleBlocks,
+      plan: analysis.motion_plan ?? defaultMotionPlan(isPipelineInputMeta(sc) ? sc.canonicalVehicle?.model : null),
+      highlightPhrases: (analysis.caption_highlights ?? []).map((h) => h.phrase),
+      clipUrls: freshClipUrls,
+      musicUrl: musicTrackUrl,
+      musicTrimStartSecOverride: effectiveMusicTrimStartSec,
+      ...reelAudioVolumes,
+    })
+    console.log(`[VideoV2Pipeline][${jobId}] Re-render Motion 3D en curso.`)
+    return { renderId: 'motion3d' }
+  }
 
   const renderId = await renderSegmentsV2(
     jobId,
