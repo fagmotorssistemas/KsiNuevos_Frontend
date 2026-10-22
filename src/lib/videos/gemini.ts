@@ -270,12 +270,6 @@ function normalizeVisualOverlaysInSequence(
 
 // ─── Validación de secuencia ─────────────────────────────────────────────────
 
-/** Microclips de apertura (marca / modelo / año en vídeos de ~1s): no descartar por duración casi nula. */
-const PRESENTATION_MICROCLIP_MIN_SEC = 0.06
-
-/** Motivo fijo al inyectar segmentos de presentación omitidos por Claude (`validateGeminiSequence`). */
-const INJECTED_PRESENTATION_REASON_MARKER = 'micro-clip presentación forzado al inicio'
-
 const CAR_BRANDS = [
   'acura', 'alfa romeo', 'audi', 'bmw', 'bentley', 'buick', 'cadillac', 'chevrolet', 'chevy', 'chery',
   'chrysler', 'citroen', 'citroën', 'cupra', 'dodge', 'dongfeng', 'fiat', 'ford', 'genesis', 'gmc', 'great wall',
@@ -357,102 +351,6 @@ function sequenceItemFromSegment(seg: Segment, order: number, reason: string): S
   }
 }
 
-/**
- * Si el primer corte no cumple marca+modelo/año, intenta intercambiar con otro segmento ya en la lista
- * o insertar el mejor candidato no usado.
- *
- * Excepción: si los primeros N segmentos consecutivos son todos de presentación y entre ellos
- * cubren marca + modelo/año (e.g. "Toyota" + "Prado" + "2016"), se acepta el grupo tal cual.
- */
-function strengthenOpeningPresentation(
-  sequence: SequenceItem[],
-  segmentLookup: Map<string, Segment>,
-  allSegments: Segment[],
-  jobId: string
-): SequenceItem[] {
-  if (sequence.length === 0) return sequence
-  const reasonBySegmentId = new Map(sequence.map((it) => [it.segment_id, it.reason ?? ''] as const))
-  const firstSeg = segmentLookup.get(sequence[0].segment_id)
-  if (!firstSeg) return sequence
-  const firstIsSolidOpening =
-    openingPresentationIsAdequate(firstSeg) &&
-    !isTechnicalSpecIntroSegment(firstSeg, sequence[0].reason)
-  if (firstIsSolidOpening) return sequence
-
-  // Verificar si los primeros clips de presentación forman juntos una apertura completa
-  // (e.g. clip "Toyota" + clip "Prado" + clip "2016")
-  const openingGroup: string[] = []
-  for (const item of sequence) {
-    const seg = segmentLookup.get(item.segment_id)
-    if (!seg || !isPresentationSegment(seg)) break
-    openingGroup.push(normalizeText(seg.text))
-  }
-  if (openingGroup.length >= 2) {
-    const leaderSeg = segmentLookup.get(sequence[0].segment_id)
-    if (!(leaderSeg && isTechnicalSpecIntroSegment(leaderSeg, sequence[0].reason))) {
-      const combined = openingGroup.join(' ')
-      const hasBrand = CAR_BRANDS.some((b) => combined.includes(b))
-      const hasYear = /\b(19|20)\d{2}\b/.test(combined)
-      const hasModel =
-        MODEL_LINE_REGEX.test(combined) ||
-        /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta|ecosport|edge|kuga|puma|territory)\b/.test(
-          combined
-        )
-      if (hasBrand && (hasYear || hasModel)) {
-        console.log(
-          `[VideoV2Pipeline][${jobId}][Editor] Apertura: grupo de ${openingGroup.length} micro-clips de presentación aceptado (marca+modelo/año combinados).`
-        )
-        return sequence
-      }
-    }
-  }
-
-  for (let j = 1; j < sequence.length; j++) {
-    const sj = segmentLookup.get(sequence[j].segment_id)
-    if (
-      sj &&
-      openingPresentationIsAdequate(sj) &&
-      !isTechnicalSpecIntroSegment(sj, sequence[j].reason)
-    ) {
-      const tmp = sequence[0]
-      sequence[0] = sequence[j]!
-      sequence[j] = tmp
-      console.warn(
-        `[VideoV2Pipeline][${jobId}][Editor] Apertura: se reordenó el primer corte para incluir marca+modelo/audio más completo (${sj.segment_id}).`
-      )
-      return sequence
-    }
-  }
-
-  const used = new Set(sequence.map((x) => x.segment_id))
-  const candidates = allSegments
-    .filter(
-      (s) =>
-        !used.has(s.segment_id) &&
-        s.source_kind !== 'visual_only' &&
-        !isMistakeSegment(s) &&
-        !isEndCtaSegment(s) &&
-        openingPresentationIsAdequate(s) &&
-        !isTechnicalSpecIntroSegment(s, reasonBySegmentId.get(s.segment_id))
-    )
-    .sort((a, b) => b.duration_s - a.duration_s)
-
-  const pick = candidates[0]
-  if (pick) {
-    const rest = sequence.filter((_, idx) => idx !== 0)
-    const merged = [sequenceItemFromSegment(pick, 1, 'apertura: marca+modelo/año (sustituye primer corte débil)'), ...rest]
-    console.warn(
-      `[VideoV2Pipeline][${jobId}][Editor] Apertura: primer corte sustituido por ${pick.segment_id} (marca+modelo/año).`
-    )
-    return merged
-  }
-
-  console.warn(
-    `[VideoV2Pipeline][${jobId}][Editor] Apertura: no se encontró segmento alternativo con marca+modelo/año; revisa el mapa o el guion.`
-  )
-  return sequence
-}
-
 function isEndCtaSegment(seg: Segment): boolean {
   const t = normalizeText(seg.text)
   if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return true
@@ -473,41 +371,6 @@ function isCtaInfoContinuationSegment(seg: Segment): boolean {
   return /\b(te pasamos|te enviamos|te mandamos)\b/.test(t) || /\b(informacion|información|whatsapp|dm)\b/.test(t)
 }
 
-/**
- * "Comenta …" + vehículo (marca/modelo/año): engagement de cierre con auto; suele ir antes de
- * "te pasamos la info" / WhatsApp dentro del bloque outro.
- */
-function isComentaVehicleEngagementClosing(seg: Segment): boolean {
-  const t = normalizeText(seg.text)
-  if (!/\bcomenta\b/.test(t)) return false
-  const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
-  const hasYear = /\b(19|20)\d{2}\b/.test(t)
-  const hasModel =
-    MODEL_LINE_REGEX.test(seg.text) ||
-    /\b[hx]?\d{1,3}\b/.test(t) ||
-    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta|ecosport|edge|kuga|puma|territory)\b/.test(
-      t
-    )
-  return (hasBrand && hasModel) || (hasModel && hasYear) || (hasBrand && hasYear)
-}
-
-/**
- * Dentro del cierre (orden ascendente = timeline): engagement comenta auto → comenta genérico
- * → info / contacto → marca Ksi al final.
- */
-function outroClosingStrength(seg: Segment | undefined): number {
-  if (!seg) return 1
-  const t = normalizeText(seg.text)
-  if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return 4
-  if (/te pasamos|te enviamos|te mandamos/.test(t)) return 2
-  if (/informacion|whatsapp|redes|siguenos|síguenos|mas info|más info|\bdm\b/.test(t)) return 2
-  if (/\bcomenta\b/.test(t)) {
-    if (isComentaVehicleEngagementClosing(seg)) return 0
-    return 1
-  }
-  return 1
-}
-
 function introOpeningStrength(seg: Segment | undefined): number {
   if (!seg) return 0
   return openingPresentationIsAdequate(seg) ? 2 : isPresentationSegment(seg) ? 1 : 0
@@ -523,102 +386,6 @@ function hasEmotionalOrLifestyleHookTone(t: string): boolean {
     /\b(no es solo|no es un carro|mas que un carro|más que un carro)\b/.test(t) ||
     /\b(identity|desire|statement)\b/.test(t)
   )
-}
-
-/** El `reason` de Claude describe explícitamente un gancho de apertura / anti-scroll (aunque el ASR sea breve o coloquial). */
-function isOpeningScrollHookFromEditorialReason(editorialReason?: string | null): boolean {
-  if (!editorialReason || !editorialReason.trim()) return false
-  const r = normalizeText(editorialReason)
-  return (
-    /\b(el\s+)?video\s+comienza\s+con\s+un\s+gancho\b/.test(r) ||
-    /\bcomienza\s+con\s+un\s+gancho\b/.test(r) ||
-    /\bgancho\s+fuerte\s+y\s+directo\b/.test(r) ||
-    /\bgancho\s+fuerte\b.*\b(beneficio|principal|publico|público)\b/.test(r) ||
-    /\bes\s+la\s+frase\s+mas\s+potente\b/.test(r) ||
-    /\bfrase\s+mas\s+potente\b/.test(r) ||
-    /\bpara\s+detener\s+el\s+scroll\b/.test(r) ||
-    /\bdetener\s+el\s+scroll\b/.test(r) ||
-    /\bopening\s+hook\b/.test(r)
-  )
-}
-
-function isInjectedPresentationMicroclip(item: SequenceItem): boolean {
-  return item.reason.includes(INJECTED_PRESENTATION_REASON_MARKER)
-}
-
-/**
- * Gancho narrativo de apertura (necesidad del cliente, propósito, pregunta) — debe ir antes que motor/ficha.
- * `editorialReason`: motivo de Claude; ayuda cuando el ASR no coincide con patrones (p. ej. "si esta camioneta trabaja").
- */
-function isNarrativeNeedHookSegment(seg: Segment, editorialReason?: string | null): boolean {
-  const t = normalizeText(seg.text)
-  if (/\bcomenta\b/.test(t)) return false
-  if (hasEmotionalOrLifestyleHookTone(t)) return true
-  if (/^¿/.test(t.trim())) return true
-  if (
-    /\bsi\s+esta\s+(la\s+)?(camioneta|pickup|pick-?up|vehiculo|vehículo)\b/.test(t) ||
-    /\bsi\s+este\s+(auto|carro|vehiculo|vehículo|camioneta|pickup)\b/.test(t)
-  ) {
-    return true
-  }
-  if (/\bt[uú]\s+factur/.test(t)) return true
-  if (/\b(trabaja|trabajan)\b[^.]{0,40}\b(tu|tú)\s+factur/.test(t)) return true
-  if (
-    /\b(buscas|busca|necesitas|necesita|te interesa|te gusta|te gustan|te sirve|te sirven|ideal para|perfecto para|perfecta para|listo para|listos para|pensando en|imagina|supongamos)\b/.test(
-      t
-    ) ||
-    /\b(camioneta de trabajo|pickup de trabajo|pick-?up de trabajo|vehiculo de trabajo|vehículo de trabajo|para tu (negocio|empresa|taller|flota|familia|trabajo))\b/.test(
-      t
-    ) ||
-    /\b(proposito|propósito|enfocado en|dirigido a|necesidad del cliente|dirigiendose|dirigiéndose)\b/.test(t) ||
-    /\b(looking for|need a|need an|want a|want an|if you need|work vehicle|work truck|pickup truck|daily driver|here'?s why|tell you why|get the job done|primary benefit|use case|why this|why the)\b/.test(
-      t
-    ) ||
-    /\b(connects|connect)\b.*\b(need|customer|viewer|audience)\b/.test(t) ||
-    /\b(makes?\s+the\s+pitch|making\s+it\s+relatable)\b/.test(t)
-  ) {
-    return true
-  }
-  if (
-    isOpeningScrollHookFromEditorialReason(editorialReason) &&
-    !segmentMentionsPowertrainSpecs(editorialBundleForSpecs(seg, editorialReason))
-  ) {
-    return true
-  }
-  return false
-}
-
-/**
- * Menciones claras de tren motriz / ficha (ES/EN). Se usa para clasificar “motor después del gancho y de la presentación”.
- */
-function segmentMentionsPowertrainSpecs(t: string): boolean {
-  return /\b(motor|motores|motor(es)?\s+de|cilindro|cilindros|cilindrada|caballos?\s*de\s*fuerza|\bhp\b|horsepower|torque|potencia|caja(\s+de)?\s*cambios|caja\s+automatica|caja\s+automática|transmis|transmission|tracción|traccion|suspensi|frenos?|combustible|\blitros?\b|litro(s)?\s+de|cilindraje|\bc\s*c\b|cc\.|dimension(es)?|capacidad de carga|kilometraje|tanque|rinden|engine|engines|ecoboost|turbocharged|\bturbo\b|supercharged|diesel|gasoline|petrol|cylinders?|\bv6\b|\bv8\b|\bi4\b|\bcvt\b|\bdct\b|syncro|powershift|inyecc|inyección|rendimiento\s+motor|rendimiento\s+de\s+motor|bajo\s+(el\s+)?capot|bajo\s+(el\s+)?capó|compartimento\s+del\s+motor|bay\s+del\s+motor|engine\s+bay|under\s+the\s+hood|hood\s+open|bonnet|specs?|specification|specifications|technical\s+spec|technical\s+specifications|ficha\s+tecnica|ficha\s+técnica|plano\s+del\s+motor|vista\s+del\s+motor)\b/i.test(
-    t
-  )
-}
-
-/**
- * Texto del segmento (ASR) + motivo editorial de Claude: el audio a veces no dice "motor" pero el reason sí
- * describe ficha / compartimento del motor.
- */
-function editorialBundleForSpecs(seg: Segment, geminiReason?: string | null): string {
-  return normalizeText([seg.text, geminiReason ?? ''].filter(Boolean).join(' '))
-}
-
-/** Presentación que es sobre todo ficha técnica (motor, caja, etc.) — va después del gancho narrativo. */
-function isTechnicalSpecIntroSegment(seg: Segment, geminiReason?: string | null): boolean {
-  if (!isPresentationSegment(seg)) return false
-  if (isNarrativeNeedHookSegment(seg, geminiReason)) return false
-  return segmentMentionsPowertrainSpecs(editorialBundleForSpecs(seg, geminiReason))
-}
-
-/** Mayor = más al inicio del bloque intro: gancho narrativo (2) > presentación neutra (1) > ficha técnica (0). */
-function introNarrativeHookRank(seg: Segment | undefined, item?: SequenceItem): number {
-  if (!seg) return 1
-  if (isNarrativeNeedHookSegment(seg, item?.reason)) return 2
-  if (!isPresentationSegment(seg)) return 1
-  if (isTechnicalSpecIntroSegment(seg, item?.reason)) return 0
-  return 1
 }
 
 /**
@@ -682,150 +449,6 @@ function hasStructuredVehicleIntroFacts(seg: Segment | undefined): boolean {
   if (!hasBrand && hasExplicitModel && seg.word_count <= 5) return true
   if (hasBrand && !hasExplicitModel && !hasYear && seg.word_count <= 4) return true
   return false
-}
-
-/**
- * Orden deseado dentro de hechos: micro-marca → línea/modelo (y mezclas con año que no son solo año) → año suelto.
- * Valores más bajos salen antes en la línea de tiempo (comparador ascendente).
- */
-function introFactSequenceStage(seg: Segment | undefined): number {
-  if (!seg) return 99
-  if (isStandaloneYearPresentationToken(seg)) return 2
-  const t = normalizeText(seg.text)
-  const hasYear = /\b(19|20)\d{2}\b/.test(t)
-  const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
-  const hasExplicitModel = hasExplicitModelTokenInText(seg, t)
-  if (hasBrand && !hasExplicitModel && !hasYear && seg.word_count <= 4) return 0
-  return 1
-}
-
-/**
- * El motivo editorial de Claude a veces etiqueta mejor el rol que el ASR (p. ej. “Presentación del producto”).
- */
-function geminiReasonHintsProductIdentityPresentation(reason?: string | null): boolean {
-  if (!reason?.trim()) return false
-  const r = normalizeText(reason)
-  if (!/\bpresentaci/.test(r)) return false
-  return (
-    /\b(producto|vehiculo|vehículo|auto|carro|modelo)\b/.test(r) ||
-    /\b(resuelve la intriga|nombrando el modelo)\b/.test(r)
-  )
-}
-
-/**
- * La presentación clara del vehículo (identidad marca/modelo/año) debe ir **siempre** antes que
- * ganchos aspiracionales, detalle técnico u otros cortes del bloque intro.
- */
-function introPresentationMustLeadRank(seg: Segment | undefined, item?: SequenceItem): number {
-  if (!seg) return 0
-  const tech = isTechnicalSpecIntroSegment(seg, item?.reason)
-  const hook = isNarrativeNeedHookSegment(seg, item?.reason)
-  const fromGeminiReason = geminiReasonHintsProductIdentityPresentation(item?.reason)
-
-  if (!tech && fromGeminiReason) return 100
-  if (
-    !tech &&
-    !hook &&
-    isPresentationSegment(seg) &&
-    (openingPresentationIsAdequate(seg) || hasStructuredVehicleIntroFacts(seg))
-  ) {
-    return 100
-  }
-  if (isPresentationSegment(seg) && !tech && !hook) return 75
-  if (hook) return 40
-  if (isPresentationSegment(seg) && tech) return 20
-  if (isPresentationSegment(seg)) return 60
-  return 30
-}
-
-function compareIntroPresentationOrder(
-  a: SequenceItem,
-  b: SequenceItem,
-  lookup: Map<string, Segment>
-): number {
-  const sa = lookup.get(a.segment_id)
-  const sb = lookup.get(b.segment_id)
-  const byPresentationFirst = introPresentationMustLeadRank(sb, b) - introPresentationMustLeadRank(sa, a)
-  if (byPresentationFirst !== 0) return byPresentationFirst
-  // Desempate dentro del mismo “tier”: gancho narrativo > presentación neutra > ficha técnica (motor).
-  const byHookBeforeSpecs = introNarrativeHookRank(sb, b) - introNarrativeHookRank(sa, a)
-  if (byHookBeforeSpecs !== 0) return byHookBeforeSpecs
-  const byStrength = introOpeningStrength(sb) - introOpeningStrength(sa)
-  if (byStrength !== 0) return byStrength
-  const structA = hasStructuredVehicleIntroFacts(sa) ? 1 : 0
-  const structB = hasStructuredVehicleIntroFacts(sb) ? 1 : 0
-  if (structB !== structA) return structB - structA
-  const byStage = introFactSequenceStage(sa) - introFactSequenceStage(sb)
-  if (byStage !== 0) return byStage
-  const byVehicleTier = vehicleFactsIntroTier(sb) - vehicleFactsIntroTier(sa)
-  if (byVehicleTier !== 0) return byVehicleTier
-  // Tras gancho: presentación del auto (marca/modelo/año) antes que corte que suena a ficha/motor aunque ambos
-  // compartan marca+año y el desempate por clip_index favoreciera el clip con índice menor.
-  const powertrainPitch = (s: Segment | undefined, item: SequenceItem) =>
-    !!s &&
-    isPresentationSegment(s) &&
-    !isNarrativeNeedHookSegment(s, item.reason) &&
-    segmentMentionsPowertrainSpecs(editorialBundleForSpecs(s, item.reason))
-  const ppa = powertrainPitch(sa, a)
-  const ppb = powertrainPitch(sb, b)
-  if (ppa !== ppb) return ppa ? 1 : -1
-  // Micro-clips de presentación inyectados por el pipeline: después del gancho y de la identidad fuerte (marca/modelo/año).
-  const injA = isInjectedPresentationMicroclip(a)
-  const injB = isInjectedPresentationMicroclip(b)
-  if (injA !== injB) return injA ? 1 : -1
-  const ca = sa?.clip_index ?? 0
-  const cb = sb?.clip_index ?? 0
-  if (ca !== cb) return ca - cb
-  return (sa?.start_s ?? 0) - (sb?.start_s ?? 0)
-}
-
-function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[]): SequenceItem[] {
-  const lookup = new Map(allSegments.map((s) => [s.segment_id, s] as const))
-  const origIndex = new Map(sequence.map((item, i) => [item.segment_id, i] as const))
-  const intro: SequenceItem[] = []
-  const middle: SequenceItem[] = []
-  const outro: SequenceItem[] = []
-
-  for (const item of sequence) {
-    const seg = lookup.get(item.segment_id)
-    if (!seg) {
-      middle.push(item)
-      continue
-    }
-    if (isEndCtaSegment(seg)) outro.push(item)
-    else if (isPresentationSegment(seg) || isNarrativeNeedHookSegment(seg, item.reason)) intro.push(item)
-    else middle.push(item)
-  }
-
-  intro.sort((a, b) => compareIntroPresentationOrder(a, b, lookup))
-  outro.sort((a, b) => {
-    const sa = lookup.get(a.segment_id)
-    const sb = lookup.get(b.segment_id)
-    const byStrength = outroClosingStrength(sa) - outroClosingStrength(sb)
-    if (byStrength !== 0) return byStrength
-    const aIsTrigger = sa ? isCtaCallToActionTrigger(sa) : false
-    const bIsTrigger = sb ? isCtaCallToActionTrigger(sb) : false
-    if (aIsTrigger && !bIsTrigger) return -1
-    if (!aIsTrigger && bIsTrigger) return 1
-    return (origIndex.get(a.segment_id) ?? 0) - (origIndex.get(b.segment_id) ?? 0)
-  })
-
-  return [...intro, ...middle, ...outro]
-}
-
-/**
- * Cuando hay intro fija manual: el prefijo (cortes elegidos por el usuario) no se mezcla con el resto del bloque
- * intro al re-ordenar — si no, `enforceEditorialOrder` vuelve a ordenar por heurísticas y rompe el orden de slots.
- */
-function enforceEditorialOrderWithOptionalPinnedPrefix(
-  sequence: SequenceItem[],
-  allSegments: Segment[],
-  pinnedPrefixLength: number
-): SequenceItem[] {
-  if (pinnedPrefixLength <= 0) return enforceEditorialOrder(sequence, allSegments)
-  const pinned = sequence.slice(0, pinnedPrefixLength)
-  const tail = sequence.slice(pinnedPrefixLength)
-  return [...pinned, ...enforceEditorialOrder(tail, allSegments)]
 }
 
 /** Normaliza texto para comparar si dos tomas dicen lo mismo (no confundir con solo repetir nombre de auto). */
@@ -954,34 +577,7 @@ function consecutiveNearDuplicateUtterance(textA: string, textB: string): boolea
   return stringSimilarity(na, nb) >= 0.88
 }
 
-function dedupeSequenceByUtterance(
-  sequence: SequenceItem[],
-  segmentLookup: Map<string, Segment>,
-  jobId: string
-): SequenceItem[] {
-  const kept: SequenceItem[] = []
-  const keptTexts: string[] = []
-
-  for (const item of sequence) {
-    const seg = segmentLookup.get(item.segment_id)
-    if (!seg) {
-      kept.push(item)
-      continue
-    }
-    const text = seg.text
-    if (keptTexts.some((t) => isSameUtterance(t, text))) {
-      console.warn(
-        `[VideoV2Pipeline][${jobId}][Editor] Dedupe: descartando ${item.segment_id} (misma frase que un clip ya elegido)`
-      )
-      continue
-    }
-    kept.push(item)
-    keptTexts.push(text)
-  }
-  return kept
-}
-
-/** Tras el orden editorial, evita dos cortes seguidos casi idénticos (Claude a veces repite la misma idea). */
+/** Modos de orden fijo (operador / guion): evita dos cortes seguidos casi idénticos. */
 function dedupeConsecutiveNearDuplicates(
   sequence: SequenceItem[],
   segmentLookup: Map<string, Segment>,
@@ -1030,7 +626,7 @@ interface ValidateGeminiSequenceOptions {
   manualClipOrderIndices?: number[]
   /** Checklist: un corte obligatorio por clip del orden; sin recorte por duración (~35 s). */
   forceAllManualOrderClips?: boolean
-  /** Secuencia ya ordenada por diálogos del guión: no aplicar intro/outro editorial ni inyección de apertura. */
+  /** Secuencia ya ordenada por diálogos del guión: se conserva tal cual. */
   guionDeterministicOrder?: boolean
 }
 
@@ -1044,116 +640,6 @@ function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLen
     if (Number.isFinite(p)) n = Math.floor(p)
   }
   return Math.max(0, Math.min(n, sequenceLength))
-}
-
-/**
- * Ajusta dónde va el bloque VO: Claude propone `voice_over_insert_after_count`; se acota para que
- * haya al menos un corte antes y otro después cuando hay material suficiente, respetando presentación
- * al inicio y CTA antes del cierre. Opcionalmente se alinea el punto de inserción al 30–65 % del tiempo
- * narrativo para evitar que el VO abra o cierre el Reel por conteo de cortes engañoso.
- */
-function finalizeVoiceOverInsertPlacement(
-  sequence: SequenceItem[],
-  segmentLookup: Map<string, Segment>,
-  requested: number,
-  jobId: string
-): number {
-  const n = sequence.length
-  if (n === 0) return 0
-
-  let m = Math.max(0, Math.min(Math.floor(requested), n))
-
-  const firstSeg = segmentLookup.get(sequence[0].segment_id)
-  const firstIsPresentation = firstSeg ? isPresentationSegment(firstSeg) : false
-
-  let firstCtaIndex = -1
-  for (let i = 0; i < n; i++) {
-    const seg = segmentLookup.get(sequence[i].segment_id)
-    if (seg && isEndCtaSegment(seg)) {
-      firstCtaIndex = i
-      break
-    }
-  }
-
-  // ── Cotas duras ──────────────────────────────────────────────────────────
-  let minI = 0
-  if (firstIsPresentation) minI = 1
-  if (n >= 2) minI = Math.max(minI, 1)
-
-  let maxI = n
-  if (firstCtaIndex >= 0) maxI = firstCtaIndex
-  if (n >= 2) maxI = Math.min(maxI, n - 1)
-
-  if (minI > maxI) {
-    console.warn(
-      `[VideoV2Pipeline][${jobId}][Editor] VO insert: conflicto min (${minI}) vs max (${maxI}); se usa max (CTA tras VO).`
-    )
-    return maxI
-  }
-
-  m = Math.max(minI, Math.min(m, maxI))
-
-  // ── Heurística temporal: 30–65 % del tiempo narrativo ────────────────────
-  const rangeSize = maxI - minI
-  if (rangeSize >= 2) {
-    const totalDur = sequence.reduce((s, x) => s + x.trim_duration, 0)
-    if (totalDur > 0) {
-      const TARGET_LOW = 0.3
-      const TARGET_HIGH = 0.65
-
-      let acc = 0
-      let idealMin = minI
-      let idealMax = maxI
-
-      for (let i = 0; i < maxI; i++) {
-        acc += sequence[i].trim_duration
-        if (acc / totalDur >= TARGET_LOW) {
-          idealMin = Math.max(minI, i + 1)
-          break
-        }
-      }
-
-      acc = 0
-      for (let i = 0; i < maxI; i++) {
-        acc += sequence[i].trim_duration
-        if (acc / totalDur >= TARGET_HIGH) {
-          idealMax = Math.min(maxI, i + 1)
-          break
-        }
-      }
-
-      if (idealMin <= idealMax) {
-        const prev = m
-        m = Math.max(idealMin, Math.min(m, idealMax))
-        if (m !== prev) {
-          console.log(
-            `[VideoV2Pipeline][${jobId}][Editor] VO insert: ajuste temporal ${prev} → ${m} ` +
-              `(${((sequence.slice(0, m).reduce((s, x) => s + x.trim_duration, 0) / totalDur) * 100).toFixed(0)}% del tiempo narrativo)`
-          )
-        }
-      }
-    }
-  }
-
-  if (n >= 4 && firstIsPresentation && firstCtaIndex >= 0 && m < 2 && maxI >= 2) {
-    const target = Math.min(2, maxI)
-    if (target > m) {
-      console.log(
-        `[VideoV2Pipeline][${jobId}][Editor] VO insert: se prefiere al menos 2 cortes antes del VO (presentación + desarrollo); ${m} → ${target}`
-      )
-      m = target
-    }
-  }
-
-  if (requested === 0 && n >= 3 && !firstIsPresentation && maxI >= 1) {
-    m = Math.max(m, 1)
-  }
-  if (m !== requested) {
-    console.warn(
-      `[VideoV2Pipeline][${jobId}][Editor] voice_over_insert_after_count ajustado ${requested} → ${m} (arco: presentación → VO → CTA)`
-    )
-  }
-  return m
 }
 
 /**
@@ -1367,7 +853,7 @@ function validateSequence(
         )
         return false
       }
-      return !isMistakeSegment(seg)
+      return true
     })
     .filter((item) => {
       const seg = segmentLookup.get(item.segment_id)
@@ -1408,21 +894,6 @@ function validateSequence(
     sequence = normalizeVisualOverlaysInSequence(sequence, kinds, allSegments, jobId)
   }
 
-  // 3) Permitir micro-segmentos de presentación; descartar ultra-cortos que no aportan
-  const before = sequence.length
-  sequence = sequence.filter((item) => {
-    if (item.trim_duration >= 0.6) return true
-    const seg = segmentLookup.get(item.segment_id)
-    if (!seg) return false
-    return isPresentationSegment(seg) && item.trim_duration >= PRESENTATION_MICROCLIP_MIN_SEC
-  })
-  if (sequence.length < before) {
-    console.log(
-      `[VideoV2Pipeline][${jobId}][Editor] Se eliminaron ${before - sequence.length} segmentos ultra-cortos ` +
-        `(<0.6s no-presentación, o presentación <${PRESENTATION_MICROCLIP_MIN_SEC}s)`
-    )
-  }
-
   const manualOrderMode =
     Array.isArray(opts?.manualClipOrderIndices) && opts.manualClipOrderIndices.length > 0
   const manualOrder = manualOrderMode ? opts.manualClipOrderIndices : null
@@ -1452,65 +923,13 @@ function validateSequence(
   } else if (opts?.guionDeterministicOrder) {
     console.log(
       `[VideoV2Pipeline][${jobId}][Editor] Orden GUION determinista: se conserva la secuencia ` +
-        `(sin enforceEditorialOrder ni inyección de apertura)`
+        `(sin reordenar)`
     )
     sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
-  } else {
-    // 4) Deduplicar en el orden de Claude (antes de reordenar): así conservamos la toma que el modelo
-    //    consideró más relevante, no la que quedó primero tras el reordenamiento editorial.
-    sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
-
-    // 4b) Orden editorial + dedupe de vecinos casi iguales
-    sequence = enforceEditorialOrder(sequence, allSegments)
-    sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
-
-    // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
-    sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
-
-    // 4d) Forzar micro-clips de presentación que Claude ignoró (ej. "Toyota", "Prado", "2016" por separado)
-    //     Si existen segmentos de presentación ≥ PRESENTATION_MICROCLIP_MIN_SEC no incluidos por Claude,
-    //     se insertan al inicio en orden de aparición (clip_index, luego start_s), si no están ya en la secuencia.
-    {
-      const usedIdsInSeq = new Set(sequence.map((x) => x.segment_id))
-      const missedPresentation = allSegments
-        .filter(
-          (s) =>
-            !usedIdsInSeq.has(s.segment_id) &&
-            s.source_kind !== 'visual_only' &&
-            !isMistakeSegment(s) &&
-            isPresentationSegment(s) &&
-            s.duration_s >= PRESENTATION_MICROCLIP_MIN_SEC &&
-            !(excluded.includes(s.clip_index))
-        )
-        .sort((a, b) => a.clip_index - b.clip_index || a.start_s - b.start_s)
-
-      if (missedPresentation.length > 0) {
-        const injected = missedPresentation.map((s, idx) =>
-          sequenceItemFromSegment(s, idx + 1, INJECTED_PRESENTATION_REASON_MARKER)
-        )
-        console.log(
-          `[VideoV2Pipeline][${jobId}][Editor] Se inyectan ${injected.length} micro-clips de presentación omitidos por Claude: ` +
-            injected.map((x) => x.segment_id).join(', ')
-        )
-        // Insertar al frente, antes del resto de la secuencia
-        sequence = [...injected, ...sequence]
-        // La inyección va después del dedupe inicial: varios clips con el mismo micro ("Kia", "Kia", …)
-        // volvían a colarse. Volvemos a deduplicar y a limpiar vecinos antes del reorden editorial final.
-        sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
-        sequence = enforceEditorialOrder(sequence, allSegments)
-        sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
-      }
-    }
   }
+  // Modo automático: se respeta el orden que eligió Claude.
 
-  // 5) Duración: no se insertan clips extra por debajo de 20s (evita material ajeno al montaje elegido).
   let totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
-  if (totalDuration < 20) {
-    console.log(
-      `[VideoV2Pipeline][${jobId}][Editor] Duración total ${totalDuration.toFixed(1)}s (<20s): ` +
-        'se mantiene el montaje sin añadir segmentos de relleno.'
-    )
-  }
 
   // 6) Tope solo para reels MUY largos (>92s). Sin soft-cap ~33s: el montaje
   //    dura lo que dura el habla/segmentos elegidos (no se corta habla al final).
@@ -1564,11 +983,6 @@ function validateSequence(
     sequence = pinResult.sequence
     pinnedIntroCount = pinResult.pinnedCount
     totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
-    if (pinnedIntroCount > 0) {
-      // Re-ordenar solo el resto: el prefijo manual respeta el orden de slots (1.º, 2.º, 3.º).
-      sequence = enforceEditorialOrderWithOptionalPinnedPrefix(sequence, allSegments, pinnedIntroCount)
-      totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
-    }
   }
 
   sequence.forEach((item, i) => { item.order = i + 1 })
@@ -1577,8 +991,7 @@ function validateSequence(
   if (opts?.manualVoiceOverBaseClipIndex != null || opts?.manualVoiceOverFromExternalAudio === true) {
     const lenBeforePin = Math.max(0, sequence.length - pinnedIntroCount)
     const rawInsert = coerceVoiceOverInsertAfterCount(raw, lenBeforePin)
-    const requested = rawInsert + pinnedIntroCount
-    voiceOverInsertAfter = finalizeVoiceOverInsertPlacement(sequence, segmentLookup, requested, jobId)
+    voiceOverInsertAfter = Math.min(rawInsert + pinnedIntroCount, sequence.length)
   }
 
   return {
@@ -1589,64 +1002,23 @@ function validateSequence(
   }
 }
 
-// ─── Prompts ─────────────────────────────────────────────────────────────────
+// ─── Prompt ──────────────────────────────────────────────────────────────────
+// Claude decide la estructura del Reel (qué usar, orden, duración, apertura y cierre).
+// Aquí solo va el material, el contexto del negocio y las reglas técnicas del montaje.
 
-const AUTONOMOUS_EDIT_BLOCK = `
-MONTAJE 100% AUTOMÁTICO:
-- Nadie más va a reordenar: tu JSON es la timeline final del Reel.
-- Usa el CATÁLOGO (transcripciones y tipos de clip) + lo que ves en los videos + el mapa de segmentos.
-- Apertura del Reel: el PRIMER corte efectivo debe ser la presentación clara del vehículo (marca + modelo o año en habla o en plano) cuando exista en el mapa; después ganchos de necesidad/lifestyle o detalle técnico. Los datos de motor/ficha no deben abrir el Reel por delante de esa presentación.
-- Voz en off: si el clip con habla muestra poco (pantalla negra, tapado, solo audio útil), pon visual_overlay con el B-roll que mejor ilustre lo que se DICE en ese momento.
-- Si hay varios clips "solo plano", elige el que mejor coincida tema a tema (motor vs interior vs exterior).
-- Ritmo Reel/TikTok: cada corte debe aportar información NUEVA; NUNCA pongas dos segmentos seguidos que digan lo mismo o parafraseen la misma idea (ej. "con un diseño" y después "cuenta con un diseño" sobre el mismo tema).
-- Orden: apertura con hechos del vehículo (marca/modelo/año) sin CTA de redes. Cualquier frase con "comenta" (incl. "comenta este Prado…") es CTA y va al FINAL del Reel; dentro del cierre: engagement "comenta …" antes de "te pasamos/enviamos la información" / WhatsApp; el cierre de marca ("solo aquí en Ksi") al último.
-- Reel llamativo: cada 2–4s debe haber cambio claro de imagen, dato o energía; evita planos estáticos largos sin mensaje nuevo.
-- Evita sensación de hueco o negro prolongado: prioriza visual_overlay con B-roll alineado al audio; si un plano no aporta imagen, acorta el corte o cambia de segment_id en lugar de alargar silencio visual.
+const BROLL_PROMPT_BLOCK = `PLANOS SIN HABLA (visual_overlay):
+- Los clips SOLO PLANO no tienen audio útil: nunca van como corte propio en "sequence".
+- Puedes ponerlos encima de un corte con habla: "visual_overlay": { "clip_index": N, "trim_start": X, "trim_end": Y }, con X/Y en segundos dentro de ese clip y la misma duración que el corte. Si no aporta, usa null.
 `
 
-function manualVoiceOverMp3AutonomousBlock(): string {
-  return `
-BLOQUE VO DESDE ARCHIVO MP3 (no entra en "sequence"):
-- El audio completo de la voz en off viene de un archivo de audio (MP3/WAV) ya subido; durante ese bloque el pipeline muestra solo vídeo de los clips indicados (o B-roll) con volumen 0% encima de ese audio.
-- "sequence" solo contiene cortes de diálogo de clips que siguen en el mapa. NUNCA uses visual_overlay en "sequence".
+function voiceOverBlock(voClipIndex: number | null): string {
+  const source =
+    voClipIndex != null ? `El audio completo del clip ${voClipIndex}` : 'Un audio de voz en off subido aparte (MP3)'
+  return `BLOQUE DE VOZ EN OFF (no va en "sequence"):
+- ${source} suena una sola vez, con planos sin habla encima. "sequence" solo lleva cortes con habla de los demás clips y sin visual_overlay.
+- "voice_over_insert_after_count" = cuántos cortes de "sequence" van antes de ese bloque (0 = abre el Reel; igual al total de cortes = lo cierra). Tú decides dónde rinde más.
 `
 }
-
-function manualVoiceOverAutonomousBlock(voIdx: number): string {
-  return `
-BLOQUE VO MANUAL (no entra en "sequence"):
-- Hay un clip reservado (índice ${voIdx}) cuyo audio completo irá una sola vez con planos sin habla (B-roll de AssemblyAI) encima; el pipeline intenta cubrir el audio con planos — elige B-roll temáticamente rico para minimizar huecos visuales. Ese clip NO está en el mapa de segmentos.
-- "sequence" solo contiene cortes de diálogo de OTROS clips con habla (nunca clip ${voIdx}). NUNCA uses visual_overlay en "sequence".
-- Debes respetar el arco narrativo del JSON (presentación del carro → desarrollo / VO → CTA) y fijar "voice_over_insert_after_count" en consecuencia.
-- El PRIMER corte de "sequence" debe ser presentación clara (marca + modelo o año), sin pedir "comenta" en redes. El ÚLTIMO tramo de "sequence" debe ser cierre/CTA: cualquier "comenta …", luego Ksi/Casi Nuevos, etc.
-- En "sequence", cada corte debe aportar algo distinto: no pongas dos segmentos seguidos que repitan o parafraseen la misma idea (el sistema penaliza redundancia).
-- Ritmo viral: cortes breves y contundentes antes y después del bloque VO; evita sensación de pantalla vacía.
-`
-}
-
-const MANUAL_VO_ARCO_Y_JSON = `
-ARCO NARRATIVO (prioridad alta; el sistema reordenará cortes por tipo, pero tú eliges cuántos van antes del bloque VO):
-1) INICIO: presentación del vehículo (marca, modelo, año — ej. "Nissan Tiida 2012") si existe en el mapa. El PRIMER elemento de "sequence" debe ser ese tipo de corte cuando haya segment_id adecuado; es el ancla del Reel.
-2) DESARROLLO: uno o varios cortes con habla (beneficios, precio, detalle) y/o el bloque VO en la parte MEDIA: el audio reservado explica mientras se ven solo planos (B-roll).
-3) CIERRE: llamada a la acción o mensaje de marca ("comenta", "solo aquí en Ksi…") al FINAL del Reel — esos segmentos deben quedar en la parte DESPUÉS del bloque VO en la línea de tiempo.
-
-CLAVE "voice_over_insert_after_count" (obligatoria en el JSON raíz):
-- Entero entre 0 y longitud de "sequence": cuántos elementos de "sequence" se reproducen ANTES del bloque VO.
-- El pipeline acota tu número: con 2 o más segmentos en "sequence", el bloque VO no debe abrir ni cerrar el Reel (queda al menos un corte antes y otro después), salvo conflictos raros de detección CTA.
-- Todo CTA debe quedar después del bloque VO → el número debe ser ≤ índice del primer segmento tipo CTA en "sequence".
-- Valores típicos: 1–3 (presentación + algo de desarrollo, luego VO en la parte media, luego más contenido + CTA al final). Evita 0 y evita sequence.length.
-`
-
-const BROLL_PROMPT_BLOCK = `
-CLIPS SOLO VISUAL (B-ROLL / SIN HABLA):
-- Los segmentos marcados [SOLO PLANO — NO USAR COMO AUDIO] NO tienen habla transcrita. NUNCA uses solo esos segment_id como fuente de audio de un corte.
-- Cuando exista al menos un clip SOLO PLANO y el audio de un segmento hablado describa o sugiera esa imagen, DEBES preferir visual_overlay en lugar de mostrar solo el vídeo del clip de voz en off (si el emparejamiento es razonable).
-- En el objeto de la secuencia añade "visual_overlay": { "clip_index": N, "trim_start": X, "trim_end": Y } con N = índice del clip solo visual, X/Y en segundos dentro de ese archivo; la duración (Y−X) debe coincidir con trim_duration del segmento hablado.
-- Si ningún plano encaja bien, omite visual_overlay (se usará el vídeo del mismo clip que el audio).
-- El campo "reason" debe mencionar el tema concreto (motor, interior, rines, etc.): el sistema usa eso para alinear planos con la voz en off reservada.
-- clip_index del segmento principal siempre es el del clip CON HABLA de ese segment_id.
-Ejemplo: {"segment_id":"0_2","clip_index":0,"trim_start":12.0,"trim_end":18.5,"trim_duration":6.5,"order":1,"reason":"voz en off motor + plano motor","visual_overlay":{"clip_index":3,"trim_start":2.0,"trim_end":8.5}}
-`
 
 function buildScriptGuidanceBlock(
   scriptGuidanceText?: string | null,
@@ -1702,7 +1074,7 @@ function buildCanonicalVehicleBlock(vehicle?: CanonicalVehicleMeta | null): stri
 Marca: ${brand || '(no indicada)'}
 Modelo: ${model || '(no indicado)'}
 Año: ${year || '(no indicado)'}
-Si la transcripción (ASR) parece un error cercano a estos datos (p. ej. año troceado), alinea mentalmente con este vehículo al elegir segment_id y el orden lógico (presentación al inicio).
+Si la transcripción (ASR) parece un error cercano a estos datos (p. ej. año troceado), es este vehículo.
 === FIN VEHÍCULO ===
 
 `
@@ -1722,180 +1094,51 @@ ${capped}
 
 function buildOutputBlock(manual: boolean): string {
   return `FORMATO DE LA RESPUESTA (JSON):
-- "sequence": los cortes en el orden del Reel. En cada uno: segment_id, clip_index, trim_start, trim_end, trim_duration, order, reason (en el primer corte, marca + modelo completo) y visual_overlay (objeto o null).
+- "sequence": los cortes en el orden del Reel. En cada uno: segment_id, clip_index, trim_start, trim_end, trim_duration, order, reason (por qué va ese corte; si lleva visual_overlay, qué se ve) y visual_overlay (objeto o null).
 - "total_duration": suma de trim_duration. "overall_strategy": una frase sobre la estrategia editorial.
-- "voice_over_insert_after_count": ${manual ? 'obligatorio (ver arco narrativo)' : 'null (no hay bloque de voz en off)'}.
+- "voice_over_insert_after_count": ${manual ? 'obligatorio (ver bloque de voz en off)' : 'null (no hay bloque de voz en off)'}.
 - "caption_highlights": entre 3 y 8 frases del DIÁLOGO de los cortes elegidos que merecen destacarse en pantalla; priority 1 = más importante.
   · "phrase" debe aparecer (o casi) en la transcripción: ej. "amplia cabina", "pantalla multimedia", "resistencia".
   · kind "spec": motor, cilindrada, 4x4, diésel, turbo. "feature": cabina, pantalla, equipamiento, diseño. "emotional": confianza, resistencia, durabilidad, desempeño.
   · Sin "comenta", sin marca del concesionario ni CTAs, sin repetir la misma idea.`
 }
 
-function buildVisualPrompt(
-  formattedSegmentMap: string,
-  frameCount: number,
-  clipKinds: VideoClipKind[],
-  clipCatalog: string,
-  manualVoiceOverBaseClipIndex?: number | null,
-  scriptGuidanceText?: string | null,
-  manualVoiceOverFromExternalAudio?: boolean,
-  scriptDialogueLines?: string[] | null,
-  assemblyTranscriptDump?: string | null,
-  canonicalVehicle?: CanonicalVehicleMeta | null,
-  manualClipOrderIndices?: number[] | null
-): string {
-  const manual = manualVoiceOverBaseClipIndex != null || manualVoiceOverFromExternalAudio === true
-  const clipOrderFixed = (manualClipOrderIndices?.length ?? 0) > 0
-  const brollExtra =
-    !manual && clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
-  const autonomousBlock = clipOrderFixed
-    ? `MONTAJE CON ORDEN DE CLIPS (OPERADOR):
-- El bloque "ORDEN DE CLIPS" define la macro-línea: primero todo lo que elijas del clip índice ${manualClipOrderIndices![0]}, luego del siguiente de la lista, etc.
-- Dentro de cada clip, elige los mejores segment_id, trims EXACTOS del mapa, ritmo y descarte de errores como siempre.
-- Puedes listar los cortes en "sequence" en el orden que prefieras en el JSON; el sistema los reagrupará por clip al validar según la lista fija.
-`
-    : manualVoiceOverBaseClipIndex != null
-      ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex)
-      : manualVoiceOverFromExternalAudio === true
-        ? manualVoiceOverMp3AutonomousBlock()
-        : AUTONOMOUS_EDIT_BLOCK
-  const mapNote = manual
-    ? manualVoiceOverBaseClipIndex != null
-      ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
-      : 'Algunos clips pueden estar reservados solo como planos sobre el audio MP3 de VO (ver catálogo).\n\n'
-    : ''
+function buildEditorPrompt(opts: {
+  formattedSegmentMap: string
+  frameCount: number
+  clipKinds: VideoClipKind[]
+  clipCatalog: string
+  manualVoiceOverBaseClipIndex: number | null
+  manualVoiceOverFromExternalAudio: boolean
+  scriptGuidanceText: string | null
+  scriptDialogueLines: string[] | null
+  assemblyTranscriptDump: string | null
+  canonicalVehicle: CanonicalVehicleMeta | null
+  manualClipOrderIndices: number[] | null
+}): string {
+  const manual = opts.manualVoiceOverBaseClipIndex != null || opts.manualVoiceOverFromExternalAudio
+  const brollBlock = !manual && opts.clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
+  const voBlock = manual ? voiceOverBlock(opts.manualVoiceOverBaseClipIndex) : ''
+  const framesNote =
+    opts.frameCount > 0
+      ? `Arriba tienes ${opts.frameCount} cuadros de las tomas, cada uno etiquetado con su segment_id.`
+      : 'No tienes imágenes de las tomas: decide con el texto.'
+  const scriptBlock = buildScriptGuidanceBlock(opts.scriptGuidanceText, opts.scriptDialogueLines)
+  const manualOrderBlock =
+    (opts.manualClipOrderIndices?.length ?? 0) > 0 ? buildManualClipOrderPromptBlock(opts.manualClipOrderIndices!) : ''
 
-  const vehicleBlock = buildCanonicalVehicleBlock(canonicalVehicle ?? null)
-  const assemblyBlock = buildAssemblyTranscriptBlock(assemblyTranscriptDump ?? null)
-  const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText, scriptDialogueLines ?? null)
-  const manualOrderBlock = clipOrderFixed ? buildManualClipOrderPromptBlock(manualClipOrderIndices!) : ''
+  return `Eres el editor de video de K-SI, concesionario de autos seminuevos en Cuenca (Ecuador). Un asesor grabó estos clips para vender el vehículo. Arma con ellos el Reel vertical para Instagram y TikTok que mejor venda este auto: tú decides qué partes usar, en qué orden, cuánto dura y cómo abre y cierra.
 
-  return `Eres un editor de video profesional especializado en crear Reels virales de venta de autos para Instagram y TikTok. Eres el mejor del mundo en esto. Tu objetivo es crear un Reel que detenga el scroll y genere engagement.
+${framesNote}
 
-Arriba tienes ${frameCount} cuadros de las tomas, cada uno etiquetado con su segment_id: úsalos para juzgar encuadre, energía del vendedor y qué parte del auto se ve. También tienes el catálogo de transcripciones y tipos de clip, y el mapa fino de segmentos con timestamps EXACTOS.
+${opts.clipCatalog}
+${buildCanonicalVehicleBlock(opts.canonicalVehicle)}${buildAssemblyTranscriptBlock(opts.assemblyTranscriptDump)}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}MAPA DE SEGMENTOS (los únicos cortes posibles):
 
-${mapNote}${clipCatalog}
-${vehicleBlock}${assemblyBlock}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}${autonomousBlock}
+${opts.formattedSegmentMap}
 
-MAPA DE SEGMENTOS (cortes permitidos; respeta start_s/end_s de cada segment_id elegido):
-
-${formattedSegmentMap}
-${brollExtra}
-REGLAS ABSOLUTAS DE CORTE:
-1. NUNCA cortes a la mitad de una palabra o frase. Cada segmento debe empezar y terminar en una pausa natural del habla.
-2. Usa EXACTAMENTE los trim_start y trim_end que correspondan al inicio y fin del segmento (start_s y end_s del mapa). NO modifiques los timestamps a menos que el segmento sea demasiado largo y necesites usar solo una parte (en ese caso, corta en una pausa natural entre palabras).
-3. Objetivo de duración total: idealmente entre 20 y 32 segundos para Reels; si el material natural queda más corto, NO rellenes con trozos irrelevantes — prioriza coherencia sobre alargar.
-4. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
-5. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO y NO deben ser CTAs de redes: cualquier segmento cuyo texto pida "comenta" (con o sin "este/esa/…") es CTA y va al FINAL del Reel.
-6. Los segmentos tipo CTA de cierre ("solo aquí en Ksi/Casi Nuevos", "comenta …", "síguenos", etc.) deben ir al FINAL.
-7. El PRIMER segmento de "sequence" debe contener en su transcripción MARCA + (modelo o año), p. ej. "Ford F-150" o "Nissan Tiida 2012". Evita como primer corte solo el año ("2012") o solo modelo sin marca si en el mapa hay un segment_id más completo.
-8. MODELO COMPLETO: mira el vídeo (emblema, parrilla, placa, pantalla) y la voz. Si el mapa parte el modelo (p. ej. un segmento termina en "H" y otro empieza en "1"), elige el segment_id que agrupe el nombre completo o el que ya diga "H1" / "X5" junto; en "reason" escribe el modelo tal cual lo venderías (ej. Hyundai H1), nunca truncado.
-
-
-${manual
-  ? `CRITERIOS (modo VO reservado — prioridad sobre el formato genérico de "gancho"):
-- PRIMER corte: presentación del auto (marca/modelo/año, ej. Nissan Tiida 2012) si existe segmento adecuado en el mapa.
-- MEDIO: desarrollo (precio, equipamiento, etc.); el bloque VO con B-roll encaja aquí (planos sin habla).
-- CIERRE: CTA o mensaje de marca; debe quedar en los últimos cortes de sequence (después del bloque VO en la línea de tiempo).`
-  : clipOrderFixed
-    ? `CRITERIOS (orden de clips fijado por el operador):
-- Tras la validación, todo lo elegido del primer clip del bloque ORDEN DE CLIPS va primero en el Reel, luego el segundo clip de esa lista, etc.
-- Dentro de cada clip, elige tomas claras y con energía; descarta silencios y errores.
-- El primer corte efectivo del montaje será del primer clip de esa lista: que sea presentación o gancho fuerte según el mapa.`
-    : `CRITERIOS DE SELECCIÓN VISUAL (en orden de prioridad):
-- GANCHO (primer segmento): Elige la toma más impactante visualmente + el texto más llamativo. Debe generar curiosidad o emoción en los primeros 2 segundos.
-- Prioriza tomas donde el vendedor está frente a la cámara con buena energía
-- Incluye tomas que muestren el auto desde ángulos atractivos
-- Descarta: vendedor de espaldas, tomas borrosas, caminando sin hablar, silencios largos
-- El cierre debe tener una llamada a la acción o dato memorable`}
-
-ESTRUCTURA IDEAL${manual ? ' (el bloque VO suele ir en el tramo 2–3)' : ''}:
-1. Presentación / gancho del vehículo (3-6s) → 2. Desarrollo (5-10s; aquí encaja el bloque VO con planos) → 3. Beneficios o precio (5-8s) → 4. Cierre con CTA (3-5s)
-
-${manual ? MANUAL_VO_ARCO_Y_JSON : ''}
-${buildOutputBlock(manual)}`
-}
-
-function buildTextOnlyPrompt(
-  formattedSegmentMap: string,
-  clipKinds: VideoClipKind[],
-  clipCatalog: string,
-  manualVoiceOverBaseClipIndex?: number | null,
-  scriptGuidanceText?: string | null,
-  manualVoiceOverFromExternalAudio?: boolean,
-  scriptDialogueLines?: string[] | null,
-  assemblyTranscriptDump?: string | null,
-  canonicalVehicle?: CanonicalVehicleMeta | null,
-  manualClipOrderIndices?: number[] | null
-): string {
-  const manual = manualVoiceOverBaseClipIndex != null || manualVoiceOverFromExternalAudio === true
-  const clipOrderFixed = (manualClipOrderIndices?.length ?? 0) > 0
-  const brollExtra =
-    !manual && clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
-  const autonomousBlock = clipOrderFixed
-    ? `MONTAJE CON ORDEN DE CLIPS (OPERADOR):
-- El bloque "ORDEN DE CLIPS" define la macro-línea: primero todo lo que elijas del clip índice ${manualClipOrderIndices![0]}, luego del siguiente de la lista, etc.
-- Dentro de cada clip, elige los mejores segment_id, trims EXACTOS del mapa, ritmo y descarte de errores como siempre.
-- Puedes listar los cortes en "sequence" en el orden que prefieras en el JSON; el sistema los reagrupará por clip al validar según la lista fija.
-`
-    : manualVoiceOverBaseClipIndex != null
-      ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex)
-      : manualVoiceOverFromExternalAudio === true
-        ? manualVoiceOverMp3AutonomousBlock()
-        : AUTONOMOUS_EDIT_BLOCK
-  const mapNote = manual
-    ? manualVoiceOverBaseClipIndex != null
-      ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
-      : 'Algunos clips pueden estar reservados solo como planos sobre el audio MP3 de VO (ver catálogo).\n\n'
-    : ''
-
-  const vehicleBlock = buildCanonicalVehicleBlock(canonicalVehicle ?? null)
-  const assemblyBlock = buildAssemblyTranscriptBlock(assemblyTranscriptDump ?? null)
-  const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText, scriptDialogueLines ?? null)
-  const manualOrderBlock = clipOrderFixed ? buildManualClipOrderPromptBlock(manualClipOrderIndices!) : ''
-
-  return `Eres un editor de video profesional especializado en crear Reels virales de venta de autos para Instagram y TikTok. Eres el mejor del mundo en esto.
-
-Tienes el catálogo de clips y el mapa de segmentos. Sin ver vídeo, infiere el mejor orden${manual ? ' y la posición del bloque VO (voice_over_insert_after_count)' : clipOrderFixed ? ' de cortes dentro de cada clip' : ' y cuándo usar visual_overlay si hay solo planos'}.
-
-${mapNote}${clipCatalog}
-${vehicleBlock}${assemblyBlock}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}${autonomousBlock}
-
-MAPA DE SEGMENTOS (silencios eliminados):
-
-${formattedSegmentMap}
-${brollExtra}
-REGLAS ABSOLUTAS DE CORTE:
-1. NUNCA cortes a la mitad de una palabra o frase. Cada segmento debe empezar y terminar en una pausa natural.
-2. Usa EXACTAMENTE los trim_start y trim_end del segmento (start_s y end_s del mapa). NO inventes timestamps.
-3. Duración total: apunta a 25–32s si el material da; si no, no rellenes con contenido débil.
-4. Puedes usar segmentos cortos si aportan valor (incluso alrededor de 1 segundo) siempre que no corten palabras.
-5. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
-6. Los segmentos de presentación de vehículo (marca/modelo/año) van al INICIO y no deben incluir CTAs "comenta …" (incl. "comenta este Toyota…"): eso siempre es cierre.
-7. Los CTAs de cierre ("solo aquí en Ksi/Casi Nuevos", cualquier "comenta …", "síguenos", etc.) van al FINAL.
-8. El PRIMER segmento de "sequence" debe incluir MARCA + (modelo o año) en el texto del mapa; no uses solo año o solo modelo sin marca como apertura si existe un segment_id mejor.
-9. MODELO COMPLETO: infiere del catálogo y del texto del mapa el modelo entero (H1, X5, 320d, etc.); en "reason" del primer corte escribe marca+modelo completos, sin truncar dígitos.
-
-${manual
-  ? `CRITERIOS (modo VO reservado):
-- Primer corte: presentación marca/modelo/año si el mapa lo permite.
-- Bloque VO en la parte media salvo mapa muy corto.
-- Últimos cortes: CTA o marca.`
-  : clipOrderFixed
-    ? `CRITERIOS DE SELECCIÓN (orden de clips fijo):
-- Incluye al menos un segmento por cada clip listado en ORDEN DE CLIPS.
-- Dentro de cada clip, prioriza frases con información nueva; descarta muletillas y errores.
-- El primer corte del primer clip de esa lista debe abrir fuerte (presentación o gancho según el mapa).`
-    : `CRITERIOS DE SELECCIÓN:
-- GANCHO (primer segmento): La frase más impactante, una pregunta, un precio, algo que detenga el scroll
-- Puedes reordenar segmentos: no importa el orden original del video
-- Puedes usar segmentos del mismo clip de forma discontinua
-- Descarta: muletillas, repeticiones, silencios`}
-
-ESTRUCTURA IDEAL${manual ? ' (bloque VO en desarrollo)' : ''}:
-1. Presentación del vehículo (3-6s) → 2. Desarrollo (5-10s; bloque VO con planos) → 3. Beneficios/precio (5-8s) → 4. Cierre CTA (3-5s)
-
-${manual ? MANUAL_VO_ARCO_Y_JSON : ''}
+REGLAS TÉCNICAS:
+- Usa solo segment_id del mapa, cada uno una vez, con trim_start = start_s y trim_end = end_s (el sistema ajusta los bordes para no cortar palabras).
+${brollBlock}${voBlock}
 ${buildOutputBlock(manual)}`
 }
 
@@ -1970,20 +1213,19 @@ export async function analyzeSegments(
   })()
   console.log(`[VideoV2Pipeline][${jobId}][Claude] Analizando ${allSegments.length} segmentos (modo: ${mode})`)
 
-  const promptArgs = [
+  const prompt = buildEditorPrompt({
+    formattedSegmentMap,
+    frameCount: frames.length,
+    clipKinds: kindsForPrompt,
     clipCatalog,
-    manualVo ?? null,
-    scriptGuidance,
-    externalVo,
-    options?.scriptDialogueLines ?? null,
-    options?.assemblyTranscriptDump ?? null,
-    options?.canonicalVehicle ?? null,
-    options?.manualClipOrderIndices,
-  ] as const
-  const prompt =
-    frames.length > 0
-      ? buildVisualPrompt(formattedSegmentMap, frames.length, kindsForPrompt, ...promptArgs)
-      : buildTextOnlyPrompt(formattedSegmentMap, kindsForPrompt, ...promptArgs)
+    manualVoiceOverBaseClipIndex: manualVo ?? null,
+    manualVoiceOverFromExternalAudio: externalVo,
+    scriptGuidanceText: scriptGuidance,
+    scriptDialogueLines: options?.scriptDialogueLines ?? null,
+    assemblyTranscriptDump: options?.assemblyTranscriptDump ?? null,
+    canonicalVehicle: options?.canonicalVehicle ?? null,
+    manualClipOrderIndices: options?.manualClipOrderIndices ?? null,
+  })
 
   const plan = await requestReelEditPlan(prompt, frames, jobId)
   const validated = validateSequence(plan, allSegments, jobId, clipKinds, validateOpts)
