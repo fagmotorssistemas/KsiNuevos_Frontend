@@ -596,6 +596,11 @@ function dedupeConsecutiveNearDuplicates(
     const seg = segmentLookup.get(item.segment_id)
     const prevSeg = segmentLookup.get(out[out.length - 1]!.segment_id)
     if (seg && prevSeg) {
+      // Los planos sin habla solo tienen un texto marcador casi igual entre clips: nunca son "repetidos".
+      if (seg.source_kind === 'visual_only' || prevSeg.source_kind === 'visual_only') {
+        out.push(item)
+        continue
+      }
       const preserveCtaChain =
         isEndCtaSegment(prevSeg) &&
         isEndCtaSegment(seg) &&
