@@ -293,8 +293,8 @@ const Palabra: React.FC<LineProps> = ({ words, local, fps, lineIndex }) => {
 const SHORT_WORD = /^(EL|LA|LOS|LAS|UN|UNA|DE|DEL|Y|O|EN|CON|POR|PARA|QUE|SU|SUS|ES|AL|LO|SE|TU|MI)$/
 
 /**
- * Camioneta: la frase entera aparece de una vez (sube un poco, sin rebote), letra condensada blanca con
- * sombra y una palabra en naranja (la clave o la más larga). Sobrio, como la referencia.
+ * Camioneta: la frase entera aparece de una vez (sube un poco, sin rebote), letra condensada blanca limpia
+ * (sin sombra ni borde) y una palabra en naranja (la clave o la más larga). Sobrio, como la referencia.
  */
 const Offroad: React.FC<LineProps> = ({ words, local }) => {
   const marked = words.some(({ w }) => w.emphasis)
@@ -311,7 +311,6 @@ const Offroad: React.FC<LineProps> = ({ words, local }) => {
             fontSize: 90,
             lineHeight: 1.05,
             color: w.emphasis || i === longest ? PALETTES.offroad.accent : COLORS.white,
-            textShadow: '0 5px 0 rgba(0,0,0,0.35), 0 8px 22px rgba(0,0,0,0.8)',
           }}
         >
           {text}
@@ -349,7 +348,6 @@ function cineStyle(style: CaptionStyle): React.FC<LineProps> {
               letterSpacing: `${font.spacing}em`,
               lineHeight: 1.08,
               color: w.emphasis ? accent : COLORS.white,
-              textShadow: '0 3px 16px rgba(0,0,0,0.75), 0 1px 3px rgba(0,0,0,0.6)',
             }}
           >
             {text}

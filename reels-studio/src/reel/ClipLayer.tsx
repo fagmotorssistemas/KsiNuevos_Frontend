@@ -163,7 +163,10 @@ export const ClipLayer: React.FC<{
           background:
             theme === 'offroad'
               ? 'radial-gradient(ellipse 85% 70% at 50% 48%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.6) 100%), linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.45) 100%)'
-              : 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.45) 100%)',
+              : cine
+                ? // Los textos van sin sombra: la imagen se oscurece suave donde van (arriba y abajo) para que se lean.
+                  'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.12) 24%, rgba(0,0,0,0) 34%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.25) 64%, rgba(0,0,0,0.62) 100%)'
+                : 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.45) 100%)',
         }}
       />
       {transitionIn === 'flash' && !cine ? (

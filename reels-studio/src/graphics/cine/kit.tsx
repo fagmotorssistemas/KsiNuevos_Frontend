@@ -71,7 +71,8 @@ const WORN = `url("data:image/svg+xml;utf8,${encodeURIComponent(
     "<rect width='100%' height='100%' filter='url(#n)'/></svg>"
 )}")`
 
-/** Texto de título: blanco limpio (general) o blanco gastado tipo metal (camionetas). */
+/** Texto de título: blanco limpio (general) o blanco gastado tipo metal (camionetas). Sin sombra ni borde: lo legible
+ * lo da el oscurecido suave de la imagen detrás (ver ClipLayer y el fondo de cada gráfico). */
 export const CineText: React.FC<{ text: string; size: number; family: string; worn?: boolean; color?: string; spacing?: number; style?: React.CSSProperties }> = ({
   text,
   size,
@@ -91,7 +92,6 @@ export const CineText: React.FC<{ text: string; size: number; family: string; wo
       letterSpacing: `${spacing}em`,
       textTransform: 'uppercase',
       whiteSpace: 'nowrap',
-      filter: 'drop-shadow(0 6px 22px rgba(0,0,0,0.55))',
       ...(worn
         ? {
             color: 'transparent',
@@ -125,7 +125,6 @@ export const CineLabel: React.FC<{ text: string; size?: number; color?: string; 
       textTransform: 'uppercase',
       color,
       whiteSpace: 'nowrap',
-      textShadow: '0 2px 12px rgba(0,0,0,0.6)',
       ...style,
     }}
   >

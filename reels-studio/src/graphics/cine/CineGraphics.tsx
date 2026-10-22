@@ -401,7 +401,7 @@ export const CineList: React.FC<Props> = ({ g }) => {
             }}
           >
             <span style={{ fontFamily: FONT_UI, fontWeight: 800, fontSize: 30, letterSpacing: '0.1em', color: accent }}>{String(i + 1).padStart(2, '0')}</span>
-            <span style={{ fontFamily: FONT_UI, fontWeight: 800, fontSize: 54, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#fff', textShadow: '0 2px 14px rgba(0,0,0,0.6)' }}>{item}</span>
+            <span style={{ fontFamily: FONT_UI, fontWeight: 800, fontSize: 54, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#fff' }}>{item}</span>
           </div>
         ))}
       </div>
