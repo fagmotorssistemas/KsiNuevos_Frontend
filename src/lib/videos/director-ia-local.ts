@@ -43,8 +43,10 @@ export function directorIaUnavailableReason(): string | null {
   if (!fs.existsSync(TSX_CLI) || !fs.existsSync(path.join(STUDIO_DIR, 'node_modules', '@anthropic-ai', 'sdk'))) {
     return 'Falta instalar o actualizar reels-studio: abre una terminal en la carpeta reels-studio y corre "npm install".'
   }
-  if (!process.env.ASSEMBLYAI_API_KEY) return 'Falta ASSEMBLYAI_API_KEY en .env.local.'
-  if (!process.env.ANTHROPIC_API_KEY) return 'Falta ANTHROPIC_API_KEY en .env.local (Claude dirige los reels).'
+  if (!process.env.ASSEMBLYAI_API_KEY) return 'Falta ASSEMBLYAI_API_KEY en .env o .env.local (si la acabas de agregar, reinicia npm run dev).'
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return 'Falta ANTHROPIC_API_KEY en .env o .env.local (Claude dirige los reels). Si la acabas de agregar, reinicia npm run dev.'
+  }
   try {
     execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })
   } catch {
