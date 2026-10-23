@@ -1041,6 +1041,23 @@ function voiceOverBlock(voClipIndex: number | null): string {
 `
 }
 
+/**
+ * Con orden manual de clips, los clips SOLO PLANO de ese orden entran solos como tomas completas
+ * (reorderSequenceByManualClipOrder). Se le avisa a Claude para que no los duplique y les ponga gráficos.
+ */
+function buildOrderedBrollTakesBlock(takes: Segment[], motion: boolean): string {
+  if (takes.length === 0) return ''
+  const list = takes.map((s) => `${s.segment_id} (clip ${s.clip_index}, ${s.duration_s.toFixed(1)} s)`).join(', ')
+  const use = motion
+    ? 'Ponles gráficos en "beats" con su segment_id ("offset" = segundos desde que empieza la toma): como no llevan subtítulos, son el mejor lugar para títulos 3D grandes, placas, K-SI SCAN y transiciones. Mira su cuadro para saber qué muestran.'
+    : 'Puedes usar su segment_id en "spec_cards" para poner un dato sobre esa toma.'
+  return `TOMAS SIN HABLA DEL ORDEN DE CLIPS:
+- El operador incluyó en el orden estos clips SOLO PLANO: ${list}. El sistema los pone solos como tomas completas en su lugar del orden, con su sonido ambiente y sin subtítulos.
+- No los metas en "sequence" ni los uses como visual_overlay: ya salen en el Reel.
+- ${use}
+`
+}
+
 function buildScriptGuidanceBlock(
   scriptGuidanceText?: string | null,
   scriptDialogueLines?: string[] | null
@@ -1138,6 +1155,7 @@ function buildEditorPrompt(opts: {
   manualClipOrderIndices: number[] | null
   previousReelsBlock: string | null
   motion: boolean
+  orderedBrollTakes: Segment[]
 }): string {
   const manual = opts.manualVoiceOverBaseClipIndex != null || opts.manualVoiceOverFromExternalAudio
   const brollBlock = !manual && opts.clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
@@ -1161,12 +1179,25 @@ ${opts.formattedSegmentMap}
 
 REGLAS TÉCNICAS:
 - Usa solo segment_id del mapa, cada uno una vez, con trim_start = start_s y trim_end = end_s (el sistema ajusta los bordes para no cortar palabras).
-${brollBlock}${voBlock}
+${brollBlock}${voBlock}${buildOrderedBrollTakesBlock(opts.orderedBrollTakes, opts.motion)}
 ${opts.motion ? MOTION_PLAN_PROMPT_BLOCK : VISUAL_PLAN_BLOCK}
 ${buildOutputBlock(manual)}`
 }
 
 // ─── Función principal: analyzeSegments ──────────────────────────────────────
+
+/** Tomas SOLO PLANO que el orden manual va a insertar (mismo segmento que elige reorderSequenceByManualClipOrder). */
+function orderedBrollTakes(manualOrder: number[], kinds: VideoClipKind[], allSegments: Segment[]): Segment[] {
+  return manualOrder
+    .filter((c) => kinds[c] === 'visual_only')
+    .map(
+      (c) =>
+        allSegments
+          .filter((s) => s.clip_index === c && !isMistakeSegment(s))
+          .sort((a, b) => a.start_s - b.start_s || a.segment_id.localeCompare(b.segment_id))[0]
+    )
+    .filter((s): s is Segment => s != null)
+}
 
 export interface AnalyzeSegmentsOptions {
   /** Clip de voz en off reservado (audio completo + B-roll); excluido del mapa/prompt y de la secuencia validada. */
@@ -1255,6 +1286,7 @@ export async function analyzeSegments(
     manualClipOrderIndices: options?.manualClipOrderIndices ?? null,
     previousReelsBlock: options?.previousReelsBlock ?? null,
     motion: options?.motion === true,
+    orderedBrollTakes: orderedBrollTakes(options?.manualClipOrderIndices ?? [], kindsForPrompt, allSegments),
   })
 
   const plan = await requestReelEditPlan(prompt, frames, jobId, { motion: options?.motion === true })
