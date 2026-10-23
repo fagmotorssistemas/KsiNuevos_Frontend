@@ -487,6 +487,13 @@ export function CreateReelModal({
     return libraryClips
   }
 
+  /** Motion 3D en local convierte cada clip con su propio ffmpeg: no depende de la optimización de Nest. */
+  function motionRendersLocally(): boolean {
+    if (!motionAvailable || renderEngine !== 'motion') return false
+    // Con voz en off el pipeline cae a Shotstack, que sí necesita el MP4 de Nest.
+    return !(flowType === 'multiple' && (voiceOverMode === 'clip' || voiceOverMode === 'mp3'))
+  }
+
   async function handleSubmitFromLibrary() {
     if (!librarySourceJobId) {
       throw new Error('Falta el job origen de la biblioteca')
@@ -553,7 +560,9 @@ export function CreateReelModal({
     }
 
     // Compresión Nest → entrega H.264 .mp4; usar remappedPaths en finalize (Shotstack).
-    const { remappedPaths } = await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress)
+    const { remappedPaths } = await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress, {
+      continueOnFailure: motionRendersLocally(),
+    })
 
     setUploadProgress('Leyendo orientación de clips…')
     const clipOrientations: ClipOrientationMeta[] = []
@@ -852,7 +861,8 @@ export function CreateReelModal({
       const { remappedPaths } = await compressJobClipsOrThrow(
         newJobId,
         uploads.map((u) => u.path),
-        setUploadProgress
+        setUploadProgress,
+        { continueOnFailure: motionRendersLocally() }
       )
 
       // ── PASO 3: Duración de cada clip en el navegador (clasificación B-roll + respaldo sin ffprobe)

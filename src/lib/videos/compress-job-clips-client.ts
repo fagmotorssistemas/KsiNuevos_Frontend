@@ -25,14 +25,24 @@ export type CompressJobClipsResult = {
  *
  * Tras comprimir, Nest sube un **.mp4 H.264** de entrega (no reescribe el .mov).
  * Hay que usar `remappedPaths` en finalize para que Shotstack no baje el original.
+ *
+ * Con `continueOnFailure` (Reel Motion 3D en local, que convierte cada clip con su propio ffmpeg)
+ * un fallo de Nest no bloquea: se sigue con los clips originales.
  */
 export async function compressJobClipsOrThrow(
   jobId: string,
   paths: string[],
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  options: { continueOnFailure?: boolean } = {}
 ): Promise<CompressJobClipsResult> {
   if (paths.length === 0) {
     return { count: 0, remappedPaths: [], pathRemap: {} }
+  }
+
+  const continueWithOriginals = (reason: string): CompressJobClipsResult => {
+    console.warn(`[compress-clips][${jobId}] ${reason} — Motion 3D sigue con los clips originales`)
+    onProgress?.('El servidor de video no optimizó los clips; Motion 3D los convierte en esta PC. Continuando…')
+    return { count: 0, remappedPaths: paths, pathRemap: {} }
   }
 
   onProgress?.(
@@ -54,6 +64,7 @@ export async function compressJobClipsOrThrow(
     })
     data = (await compressRes.json()) as CompressClipsApiResult
   } catch {
+    if (options.continueOnFailure) return continueWithOriginals('No se pudo contactar el servicio de optimización')
     throw new Error(
       'No se pudo contactar el servicio de optimización de clips. Revisa tu conexión e inténtalo de nuevo.'
     )
@@ -90,6 +101,9 @@ export async function compressJobClipsOrThrow(
   }
 
   if (errors.length > 0) {
+    if (options.continueOnFailure) {
+      return continueWithOriginals(`Nest no optimizó ${errors.length} clip(s): ${errors.join(', ')}`)
+    }
     throw new Error(
       'No se pudieron optimizar los clips en el servidor (backend de video no disponible o compresión fallida). ' +
         'Comprime los videos manualmente o contacta soporte antes de continuar.'
