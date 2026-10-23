@@ -78,9 +78,21 @@ export interface VideoJobPipelineInputMeta {
    * con títulos 3D y gráficos animados; solo en local).
    */
   renderEngine?: ReelRenderEngine | null
+  /**
+   * Formato Motion 3D elegido en el modal (camioneta, familiar o premium). Si falta, el pipeline lo
+   * decide por el vehículo del inventario (tipo de carrocería, marca y precio).
+   */
+  motionFormat?: ReelMotionFormat | null
 }
 
 export type ReelRenderEngine = 'shotstack' | 'motion'
+
+export const REEL_MOTION_FORMATS = ['camioneta', 'familiar', 'premium'] as const
+export type ReelMotionFormat = (typeof REEL_MOTION_FORMATS)[number]
+
+export function isReelMotionFormat(x: unknown): x is ReelMotionFormat {
+  return typeof x === 'string' && (REEL_MOTION_FORMATS as readonly string[]).includes(x)
+}
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta {
   if (typeof x !== 'object' || x === null || !('_v2_pipeline_input' in x)) return false
@@ -112,6 +124,13 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     o.captionStyleVersion === 'v2' ||
     o.renderEngine === 'motion'
   )
+}
+
+/** Formato Motion 3D elegido a mano en el modal; null = automático según el vehículo. */
+export function motionFormatFromPipelineMeta(selectedClips: unknown): ReelMotionFormat | null {
+  if (!selectedClips || typeof selectedClips !== 'object') return null
+  const f = (selectedClips as VideoJobPipelineInputMeta).motionFormat
+  return isReelMotionFormat(f) ? f : null
 }
 
 /** Motor de render elegido en el modal (jobs viejos: Shotstack). */

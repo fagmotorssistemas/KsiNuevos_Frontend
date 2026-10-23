@@ -20,6 +20,8 @@ const FOV = 32
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x))
 const easeOutCubic = (p) => 1 - Math.pow(1 - p, 3)
+const easeInCubic = (p) => p * p * p
+const easeInOutSine = (p) => -(Math.cos(Math.PI * p) - 1) / 2
 const easeOutExpo = (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p))
 const easeOutBack = (p, s = 1.7) => 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2)
 function easeOutBounce(p) {
@@ -111,6 +113,28 @@ function finishMaterials(finish, accent, seed) {
         new THREE.MeshStandardMaterial({ color: 0xd0202e, metalness: 0.75, roughness: 0.32, map: metalTexture('#c41c2a', ['#ff5a5a', '#6b0a12'], seed) }),
         new THREE.MeshStandardMaterial({ color: 0x8e0f19, metalness: 0.85, roughness: 0.3 }),
       ]
+    // Formato premium: cromo de espejo y oro pulido con laca
+    case 'espejo':
+      return [
+        new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 1, roughness: 0.04, clearcoat: 1, clearcoatRoughness: 0.02 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xc9ced6, metalness: 1, roughness: 0.12 }),
+      ]
+    case 'oro_pulido':
+      return [
+        new THREE.MeshPhysicalMaterial({ color: 0xf0c977, metalness: 1, roughness: 0.14, clearcoat: 0.6, clearcoatRoughness: 0.05 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xa8792f, metalness: 1, roughness: 0.25 }),
+      ]
+    // Formato familiar: perla nacarada con cantos de color, o caramelo brillante del color de acento
+    case 'perla':
+      return [
+        new THREE.MeshPhysicalMaterial({ color: 0xfbf8f3, metalness: 0.05, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.06, iridescence: 0.5, iridescenceIOR: 1.6 }),
+        new THREE.MeshPhysicalMaterial({ color: new THREE.Color(accent), metalness: 0.1, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.1 }),
+      ]
+    case 'caramelo':
+      return [
+        new THREE.MeshPhysicalMaterial({ color: new THREE.Color(accent), metalness: 0, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.04 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.3, clearcoat: 0.8 }),
+      ]
     case 'oxido':
     default:
       return [
@@ -169,11 +193,41 @@ export function createStage(canvas) {
 
 const toWorld = (x, y) => [x - W / 2, H / 2 - y]
 
+// ─── Brillo que cruza las letras ──────────────────────────────────────────────
+
+/**
+ * Agrega a los materiales una franja de luz diagonal cuya posición (x en px del mundo) se mueve con
+ * `uShine`. La cámara mira de frente sin girar, así que la posición en vista es la del mundo.
+ */
+function addShine(materials, size) {
+  const uniforms = { uShine: { value: -1e6 }, uShineW: { value: size * 0.32 } }
+  for (const m of materials) {
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uShine = uniforms.uShine
+      shader.uniforms.uShineW = uniforms.uShineW
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'uniform float uShine;\nuniform float uShineW;\nvoid main() {')
+        .replace(
+          '#include <dithering_fragment>',
+          'float shineD = (-vViewPosition.x) + (-vViewPosition.y) * 0.45 - uShine;\n' +
+            'gl_FragColor.rgb += vec3(1.0, 0.97, 0.9) * (1.0 - smoothstep(0.0, uShineW, abs(shineD))) * 0.6;\n' +
+            '#include <dithering_fragment>'
+        )
+    }
+    m.customProgramCacheKey = () => 'brillo'
+  }
+  return uniforms
+}
+
 // ─── Título / cifra de metal ─────────────────────────────────────────────────
 
 /**
  * Palabra 3D armada por letras (cada letra es una malla: permite entradas letra por letra).
- * opts: { text, font, finish, accent, x, y, size, maxWidth, start, end, entrance, seed, depth }
+ * opts: { text, font, finish, accent, x, y, size, maxWidth, start, end, entrance, seed, depth, spacing }
+ *   spacing: aire extra entre letras, en fracción del tamaño (0 = el de la fuente)
+ *   alive: letras vivas (formatos familiar y premium): se asientan con rebote, flotan, les pasa un
+ *     brillo de luz y salen animadas en vez de solo desvanecerse
+ *   exit: con alive, 'volar' (salen disparadas hacia la cámara) o 'subir' (suben suaves)
  *   entrance: 'caer' | 'fondo' | 'letras' | 'golpe'
  */
 export async function addTitle3D(stage, opts) {
@@ -191,6 +245,9 @@ export async function addTitle3D(stage, opts) {
     entrance = 'caer',
     seed = 7,
     depth,
+    spacing = 0,
+    alive = false,
+    exit = 'volar',
   } = opts
   const font = await loadFont(fontName)
   const [faceMat, sideMat] = finishMaterials(finish, accent, seed)
@@ -226,7 +283,7 @@ export async function addTitle3D(stage, opts) {
       group.add(holder)
       letters.push(holder)
     }
-    cursor += adv
+    cursor += adv + spacing * size
   }
   // Centrar y ajustar al ancho máximo
   const fit = cursor > maxWidth ? maxWidth / cursor : 1
@@ -236,7 +293,13 @@ export async function addTitle3D(stage, opts) {
   group.position.set(wx, wy, 0)
   stage.scene.add(group)
 
-  const outDur = 0.18
+  const outDur = alive ? 0.36 : 0.18
+  // Cuándo termina de entrar la palabra (desde ahí flota y le pasa el brillo).
+  const settle = entrance === 'fondo' ? 0.55 : entrance === 'golpe' ? 0.3 : entrance === 'letras' ? 0.42 + letters.length * 0.06 : 0.5 + letters.length * 0.035
+  const width = cursor * fit
+  // Brillo: una franja de luz diagonal que cruza la palabra justo después de entrar (en el material,
+  // así se ve igual sobre cromo, oro o perla).
+  const shine = alive ? addShine([faceMat, sideMat], size) : null
   const piece = {
     update(t) {
       const visible = t >= start && t < end
@@ -244,9 +307,15 @@ export async function addTitle3D(stage, opts) {
       if (!visible) return
       const local = t - start
       const out = clamp01((t - (end - outDur)) / outDur)
-      faceMat.opacity = sideMat.opacity = 1 - out
+      // Con letras vivas se ven moverse antes de desvanecerse.
+      faceMat.opacity = sideMat.opacity = alive ? 1 - clamp01((out - 0.45) / 0.55) : 1 - out
       const sway = Math.sin(t * 1.3 + seed) * 0.05
       group.rotation.set(-0.08, sway, 0)
+      const floatIn = alive ? clamp01((local - settle) / 0.4) : 0
+      if (shine) {
+        const g = clamp01((local - settle - 0.05) / 0.7)
+        shine.uShine.value = g > 0 && g < 1 ? wx - width / 2 - size + g * (width + size * 2.4) : -1e6
+      }
       letters.forEach((l, i) => {
         let ox = 0
         let oy = 0
@@ -271,9 +340,36 @@ export async function addTitle3D(stage, opts) {
           ox = Math.sin(local * 90 + i) * 10 * shake
           oy = Math.cos(local * 70) * 8 * shake
         }
+        let ry = 0
+        let sx = 1
+        let sy = 1
+        if (alive) {
+          // Se asienta con un pequeño aplastamiento al terminar de entrar
+          const q = local - (entrance === 'caer' ? i * 0.035 + 0.5 : entrance === 'letras' ? i * 0.06 + 0.42 : settle)
+          if (q >= 0 && q < 0.3) {
+            const sq = Math.sin((q / 0.3) * Math.PI) * 0.14 * (1 - q / 0.3)
+            sy = 1 - sq
+            sx = 1 + sq * 0.6
+          }
+          // Flota: cada letra sube y baja y gira un poco, desfasada de la siguiente
+          oy += Math.sin(local * 2.4 + i * 0.8) * size * 0.03 * floatIn
+          ry = Math.sin(local * 1.8 + i * 0.9) * 0.12 * floatIn
+          // Salida: letra por letra
+          const po = clamp01((t - (end - outDur) - i * 0.02) / (outDur * 0.7))
+          if (exit === 'volar') {
+            oy += easeInCubic(po) * size * 1.4
+            oz += po * 700
+            rx -= po * 1.3
+            s *= 1 - po * 0.4
+          } else {
+            oy += easeInOutSine(po) * size * 0.45
+            s *= 1 - po * 0.08
+          }
+        }
         l.position.set(l.userData.baseX + ox, oy, oz)
-        l.rotation.set(rx, 0, 0)
-        l.scale.setScalar(s * (1 - out * 0.15) * fit)
+        l.rotation.set(rx, ry, 0)
+        const k = s * (alive ? 1 : 1 - out * 0.15) * fit
+        l.scale.set(k * sx, k * sy, k)
       })
     },
   }

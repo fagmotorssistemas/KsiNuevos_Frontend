@@ -20,7 +20,7 @@ import {
   normalizeVisualPlan,
   type VisualPlan,
 } from './visual-plan'
-import { MOTION_PLAN_SCHEMA, normalizeMotionPlan, type MotionPlan } from '@/lib/reels-motion/motion-plan'
+import { motionPlanSchema, normalizeMotionPlan, type MotionFormat, type MotionPlan } from '@/lib/reels-motion/motion-plan'
 
 const DEFAULT_MODEL = 'claude-opus-5-5'
 const DEFAULT_EFFORT: Effort = 'medium'
@@ -172,15 +172,15 @@ const EDIT_PLAN_SCHEMA = {
   },
 }
 
-/** Motion 3D: el plan de gráficos reemplaza al plan visual de Shotstack. */
-function editPlanSchema(motion: boolean) {
+/** Motion 3D: el plan de gráficos del formato reemplaza al plan visual de Shotstack. */
+function editPlanSchema(motion: MotionFormat | null) {
   if (!motion) return EDIT_PLAN_SCHEMA
   const properties: Record<string, unknown> = { ...EDIT_PLAN_SCHEMA.properties }
   delete properties.visual_plan
   return {
     ...EDIT_PLAN_SCHEMA,
     required: [...EDIT_PLAN_SCHEMA.required.filter((k) => k !== 'visual_plan'), 'motion_plan'],
-    properties: { ...properties, motion_plan: MOTION_PLAN_SCHEMA },
+    properties: { ...properties, motion_plan: motionPlanSchema(motion) },
   }
 }
 
@@ -228,7 +228,7 @@ export async function requestReelEditPlan(
   prompt: string,
   frames: SegmentFrame[],
   jobId: string,
-  opts: { motion?: boolean } = {}
+  opts: { motion?: MotionFormat | null } = {}
 ): Promise<ReelEditorResult> {
   const model = process.env.CLAUDE_REELS_MODEL?.trim() || DEFAULT_MODEL
   const effort = resolveEffort()
@@ -244,7 +244,7 @@ export async function requestReelEditPlan(
     ...fallback,
     output_config: {
       effort,
-      format: { type: 'json_schema', schema: editPlanSchema(opts.motion === true) },
+      format: { type: 'json_schema', schema: editPlanSchema(opts.motion ?? null) },
     },
     messages: [{ role: 'user', content: [...frameBlocks(frames), { type: 'text', text: prompt }] }],
   })
@@ -288,7 +288,7 @@ export async function requestReelEditPlan(
       : {}),
     caption_highlights: raw.caption_highlights.slice(0, 8),
     visual_plan: normalizeVisualPlan(raw.visual_plan),
-    motion_plan: normalizeMotionPlan(raw.motion_plan),
+    motion_plan: opts.motion ? normalizeMotionPlan(raw.motion_plan, opts.motion) : null,
     usage,
   }
 }

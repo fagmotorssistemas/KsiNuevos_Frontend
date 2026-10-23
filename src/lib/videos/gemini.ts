@@ -12,7 +12,7 @@ import { defaultClipKinds } from './clip-config'
 import { requestReelEditPlan, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
 import type { SegmentFrame } from './segment-frames'
 import type { VisualPlan } from './visual-plan'
-import { MOTION_PLAN_PROMPT_BLOCK, type MotionPlan } from '@/lib/reels-motion/motion-plan'
+import { motionPlanPromptBlock, type MotionFormat, type MotionPlan } from '@/lib/reels-motion/motion-plan'
 
 // ─── Tipos de respuesta ──────────────────────────────────────────────────────
 
@@ -1049,7 +1049,7 @@ function buildOrderedBrollTakesBlock(takes: Segment[], motion: boolean): string 
   if (takes.length === 0) return ''
   const list = takes.map((s) => `${s.segment_id} (clip ${s.clip_index}, ${s.duration_s.toFixed(1)} s)`).join(', ')
   const use = motion
-    ? 'Ponles gráficos en "beats" con su segment_id ("offset" = segundos desde que empieza la toma): como no llevan subtítulos, son el mejor lugar para títulos 3D grandes, placas, K-SI SCAN y transiciones. Mira su cuadro para saber qué muestran.'
+    ? 'Ponles gráficos en "beats" con su segment_id ("offset" = segundos desde que empieza la toma): como no llevan subtítulos, son el mejor lugar para títulos 3D grandes, tarjetas, señales y transiciones. Mira su cuadro para saber qué muestran.'
     : 'Puedes usar su segment_id en "spec_cards" para poner un dato sobre esa toma.'
   return `TOMAS SIN HABLA DEL ORDEN DE CLIPS:
 - El operador incluyó en el orden estos clips SOLO PLANO: ${list}. El sistema los pone solos como tomas completas en su lugar del orden, con su sonido ambiente y sin subtítulos.
@@ -1118,6 +1118,37 @@ Si la transcripción (ASR) parece un error cercano a estos datos (p. ej. año tr
 `
 }
 
+/** Desde este kilometraje el kilometraje deja de ser el gran argumento del Reel (regla del concesionario). */
+const LOW_MILEAGE_KM = 20000
+
+const thousands = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+
+/**
+ * Autos con menos de 20.000 km: el kilometraje se remarca desde el gancho. Con el dato del inventario se
+ * aplica aunque el asesor no lo diga; sin dato (o en 0, sin registrar) se aplica si el asesor lo dice.
+ */
+function buildLowMileageBlock(mileageKm: number | null, motion: MotionFormat | null): string {
+  const known = mileageKm != null && mileageKm > 0
+  if (known && mileageKm >= LOW_MILEAGE_KM) return ''
+  const how =
+    motion === 'familiar'
+      ? 'en "hook" pon badge_label "SOLO" y badge_value con los km (ej. 14.000 km) y suma un "contador" grande con la cifra exacta cuando el asesor la diga (o en la segunda toma si no la dice)'
+      : motion === 'premium'
+        ? 'ponla como "titulo_3d" (text = la cifra, label SOLO, sub KILÓMETROS) en los primeros segundos y nómbrala también en la "ficha"'
+        : motion === 'camioneta'
+          ? 'ponla como "titulo_3d" gigante en el primer o segundo corte y suma una "placa" SOLO ### KM'
+          : 'usa "hook_text" con los km (ej. SOLO 14.000 KM) y una "spec_cards" con la cifra donde el asesor la diga'
+  const source = known
+    ? `- Según el inventario este auto tiene ${thousands(mileageKm)} km: menos de 20.000, así que es el dato que más vende y va remarcado aunque el asesor no lo diga (usa esta cifra exacta).`
+    : '- Si el asesor dice que el auto tiene menos de 20.000 km, ese es el dato que más vende y va remarcado.'
+  return `KILOMETRAJE BAJO (regla del concesionario):
+${source}
+- Remárcalo mucho más que los otros datos: desde el segundo 0 (gancho) y otra vez en grande cuando se menciona; ${how}. Agrega la cifra a "caption_highlights".
+- Con 20.000 km o más el kilometraje es un dato más y no va en el gancho.
+
+`
+}
+
 function buildAssemblyTranscriptBlock(dump: string | null | undefined): string {
   const t = dump?.trim()
   if (!t) return ''
@@ -1152,9 +1183,12 @@ function buildEditorPrompt(opts: {
   scriptDialogueLines: string[] | null
   assemblyTranscriptDump: string | null
   canonicalVehicle: CanonicalVehicleMeta | null
+  /** Kilometraje del inventario (null = sin vehículo o sin registrar). */
+  mileageKm: number | null
   manualClipOrderIndices: number[] | null
   previousReelsBlock: string | null
-  motion: boolean
+  /** Formato Motion 3D, o null para el plan visual de Shotstack. */
+  motion: MotionFormat | null
   orderedBrollTakes: Segment[]
 }): string {
   const manual = opts.manualVoiceOverBaseClipIndex != null || opts.manualVoiceOverFromExternalAudio
@@ -1173,14 +1207,14 @@ function buildEditorPrompt(opts: {
 ${framesNote}
 
 ${opts.clipCatalog}
-${buildCanonicalVehicleBlock(opts.canonicalVehicle)}${opts.previousReelsBlock ?? ''}${buildAssemblyTranscriptBlock(opts.assemblyTranscriptDump)}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}MAPA DE SEGMENTOS (los únicos cortes posibles):
+${buildCanonicalVehicleBlock(opts.canonicalVehicle)}${buildLowMileageBlock(opts.mileageKm, opts.motion)}${opts.previousReelsBlock ?? ''}${buildAssemblyTranscriptBlock(opts.assemblyTranscriptDump)}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}MAPA DE SEGMENTOS (los únicos cortes posibles):
 
 ${opts.formattedSegmentMap}
 
 REGLAS TÉCNICAS:
 - Usa solo segment_id del mapa, cada uno una vez, con trim_start = start_s y trim_end = end_s (el sistema ajusta los bordes para no cortar palabras).
-${brollBlock}${voBlock}${buildOrderedBrollTakesBlock(opts.orderedBrollTakes, opts.motion)}
-${opts.motion ? MOTION_PLAN_PROMPT_BLOCK : VISUAL_PLAN_BLOCK}
+${brollBlock}${voBlock}${buildOrderedBrollTakesBlock(opts.orderedBrollTakes, opts.motion != null)}
+${opts.motion ? motionPlanPromptBlock(opts.motion) : VISUAL_PLAN_BLOCK}
 ${buildOutputBlock(manual)}`
 }
 
@@ -1220,8 +1254,10 @@ export interface AnalyzeSegmentsOptions {
   manualClipOrderIndices?: number[]
   /** Resumen de reels anteriores del mismo vehículo (previous-reels.ts) para que Claude no los repita. */
   previousReelsBlock?: string
-  /** Reel Motion 3D: Claude devuelve el plan de gráficos (motion_plan) en vez del plan visual de Shotstack. */
-  motion?: boolean
+  /** Kilometraje del vehículo en el inventario; con menos de 20.000 km Claude lo remarca desde el gancho. */
+  mileageKm?: number | null
+  /** Reel Motion 3D en este formato: Claude devuelve el plan de gráficos (motion_plan) en vez del plan visual de Shotstack. */
+  motion?: MotionFormat
 }
 
 /**
@@ -1285,11 +1321,12 @@ export async function analyzeSegments(
     canonicalVehicle: options?.canonicalVehicle ?? null,
     manualClipOrderIndices: options?.manualClipOrderIndices ?? null,
     previousReelsBlock: options?.previousReelsBlock ?? null,
-    motion: options?.motion === true,
+    mileageKm: options?.mileageKm ?? null,
+    motion: options?.motion ?? null,
     orderedBrollTakes: orderedBrollTakes(options?.manualClipOrderIndices ?? [], kindsForPrompt, allSegments),
   })
 
-  const plan = await requestReelEditPlan(prompt, frames, jobId, { motion: options?.motion === true })
+  const plan = await requestReelEditPlan(prompt, frames, jobId, { motion: options?.motion ?? null })
   const validated = validateSequence(
     {
       sequence: plan.sequence,

@@ -1,0 +1,93 @@
+/* Formato familiar (SUV y autos de familia): vidrio blanco, colores alegres, Poppins y Fredoka.
+   Va después de kit.css (que pone el lienzo, las capas y los videos). --accent viene del plan. */
+@font-face { font-family: fredoka; src: url('fonts/fredoka.woff') format('woff'); font-weight: 700; }
+@font-face { font-family: fredoka; src: url('fonts/fredoka500.woff') format('woff'); font-weight: 500; }
+@font-face { font-family: poppins; src: url('fonts/poppins.woff') format('woff'); font-weight: 800; }
+@font-face { font-family: poppins; src: url('fonts/poppins500.woff') format('woff'); font-weight: 500; }
+
+:root { --coral: #FF6B4A; --sky: #3BA7FF; --mint: #2ED3A0; --sun: #FFB020; --navy: #0F1B2D; }
+
+/* Contenedor de cada pieza: ancho del video, escalado desde arriba al centro */
+.fm-holder { position: absolute; left: 0; width: 1080px; transform-origin: 50% 0; }
+
+.fm-glass { position: absolute; background: rgba(255,255,255,.86); backdrop-filter: blur(22px) saturate(1.5);
+  border: 2px solid rgba(255,255,255,.75); border-radius: 44px; box-shadow: 0 24px 70px rgba(15,27,45,.28);
+  color: var(--navy); font-family: poppins; box-sizing: border-box; }
+.fm-chip { position: absolute; padding: 14px 30px; border-radius: 999px; font: 800 34px poppins; letter-spacing: 2px; white-space: nowrap;
+  background: rgba(255,255,255,.34); backdrop-filter: blur(18px); border: 2px solid rgba(255,255,255,.8); color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.fm-row { position: absolute; left: 0; right: 0; display: flex; justify-content: center; gap: 24px; }
+.fm-row .fm-chip { position: relative; }
+
+/* Dato del gancho */
+.fm-fact { padding: 26px 40px; }
+.fm-fact small { display: block; font: 800 30px poppins; letter-spacing: 4px; color: var(--accent); }
+.fm-fact b { display: block; font: 800 76px/1 poppins; white-space: nowrap; }
+
+/* Contador */
+.fm-counter-label { position: absolute; left: 52px; top: 30px; font: 800 32px poppins; letter-spacing: 6px; color: rgba(15,27,45,.55); }
+.fm-digits { position: absolute; left: 52px; top: 92px; display: flex; gap: 12px; align-items: center; }
+.fm-digit { position: relative; width: 104px; height: 150px; overflow: hidden; border-radius: 20px; background: rgba(15,27,45,.08); }
+.fm-digit .strip { position: absolute; left: 0; top: 0; width: 100%; }
+.fm-digit .strip b { display: block; height: 150px; line-height: 150px; text-align: center; font: 800 120px poppins; color: var(--navy); }
+.fm-sep { font: 800 120px poppins; width: 30px; text-align: center; line-height: 150px; }
+.fm-unit { font: 800 64px poppins; color: var(--accent); margin-left: 14px; }
+.fm-note { position: absolute; left: 52px; top: 268px; font: 800 34px poppins; letter-spacing: 4px; color: var(--accent); white-space: nowrap; }
+
+/* Tarjeta con ícono */
+.fm-card { display: flex; align-items: center; gap: 26px; padding: 26px 32px; width: 604px; }
+.fm-card h4 { margin: 0; font: 800 42px/1.1 poppins; }
+.fm-card p { margin: 6px 0 0; font: 500 28px/1.25 poppins; color: rgba(15,27,45,.7); }
+.fm-icon { width: 96px; height: 96px; border-radius: 30px; display: grid; place-items: center; flex: none; }
+.fm-icon svg { width: 54px; height: 54px; stroke: #fff; fill: none; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.fm-ripple { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 6px solid rgba(255,255,255,.95);
+  box-shadow: 0 0 18px rgba(255,255,255,.6); }
+
+/* Asientos */
+.fm-seats-title { position: absolute; left: 40px; top: 28px; font: 800 46px poppins; }
+.fm-seats-car { position: absolute; left: 70px; top: 110px; width: 280px; border-radius: 90px 90px 60px 60px; border: 4px solid rgba(15,27,45,.3); }
+.fm-seat { position: absolute; width: 70px; height: 104px; border-radius: 26px; background: rgba(15,27,45,.10); border: 3px dashed rgba(15,27,45,.25); }
+.fm-seat.front { width: 92px; }
+.fm-avatar { position: absolute; inset: 10px; border-radius: 50%; box-shadow: inset 0 -14px 0 rgba(255,255,255,.35), 0 8px 18px rgba(0,0,0,.25); }
+
+/* Ruta */
+.fm-route-title { position: absolute; left: 50px; top: 40px; font: 800 46px poppins; }
+.fm-route-text { position: absolute; left: 52px; top: 104px; font: 500 30px poppins; color: rgba(15,27,45,.65); }
+.fm-stop { position: absolute; width: 240px; text-align: center; font: 800 28px poppins; }
+.fm-pin { position: absolute; width: 72px; height: 72px; border-radius: 24px; display: grid; place-items: center; }
+.fm-pin svg { width: 42px; height: 42px; stroke: #fff; fill: none; stroke-width: 3.2; }
+
+/* Botones (WhatsApp, Seguir, cierre) */
+.fm-btn { display: flex; align-items: center; justify-content: center; gap: 22px; border-radius: 999px; color: #fff; font: 800 40px poppins; }
+.fm-btn svg { width: 58px; height: 58px; stroke: #fff; fill: none; stroke-width: 3; }
+
+/* Luz del gancho, barrido cálido, brillo */
+.fm-leak { position: absolute; inset: 0; mix-blend-mode: screen;
+  background: radial-gradient(circle at 90% 6%, rgba(255,140,90,.9), rgba(255,90,140,.35) 26%, transparent 58%); }
+.fm-shine { position: absolute; inset: 0; mix-blend-mode: screen;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%); }
+.fm-swipe { position: absolute; top: -200px; width: 520px; height: 2400px; transform: skewX(-14deg);
+  background: linear-gradient(90deg, transparent, rgba(255,236,224,.92), rgba(255,255,255,.98), rgba(255,236,224,.92), transparent); }
+
+/* Subtítulos: píldora blanca; cada palabra salta al decirse y una caja de color va detrás de la que suena */
+.fm-cap { position: absolute; left: 540px; top: 1530px; padding: 20px 38px; border-radius: 48px; max-width: 900px; width: max-content;
+  text-align: center; color: var(--navy); font: 800 54px/1.2 poppins; }
+.fm-cap-bg { position: absolute; left: 0; top: 0; bottom: 0; width: 0; z-index: 0; border-radius: 48px; background: rgba(255,255,255,.94);
+  box-shadow: 0 16px 40px rgba(0,0,0,.25); }
+.fm-cap .fm-w { position: relative; z-index: 2; display: inline-block; margin: 0 .2em; }
+.fm-cap .fm-w.key { font-size: 1.14em; }
+.fm-cap-hl { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 1; border-radius: 22px; background: var(--accent);
+  box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+
+/* Emoji que salta junto a una pieza */
+.fm-emoji { position: absolute; font-size: 110px; line-height: 1; filter: drop-shadow(0 8px 14px rgba(0,0,0,.3)); }
+
+/* Texto que se escribe solo: la parte que falta ocupa su lugar sin verse */
+.fm-card .ghost { color: transparent; }
+
+/* Flash de las transiciones y barra de progreso */
+.fm-flash { position: absolute; inset: 0; background: #fff; }
+.fm-backdrop { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, #fff 0%, var(--accent) 70%); }
+.fm-progress { position: absolute; left: 40px; right: 40px; top: 26px; height: 10px; border-radius: 6px; background: rgba(255,255,255,.35);
+  overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.fm-progress > div { width: 100%; height: 100%; background: var(--accent); transform-origin: 0 50%; }

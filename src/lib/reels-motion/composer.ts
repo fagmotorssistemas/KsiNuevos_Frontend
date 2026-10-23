@@ -1,24 +1,40 @@
 /**
  * Compositor Motion 3D: convierte el montaje (cortes), los subtítulos y el plan de movimiento de Claude
  * en una composición HyperFrames (index.html). Aquí se resuelven todos los tiempos absolutos y las
- * posiciones; el runtime del navegador (reels-motion/runtime/reel.js) solo dibuja lo que recibe.
+ * posiciones; el runtime del navegador (reels-motion/runtime/) solo dibuja lo que recibe.
  *
  * Los cortes se ubican igual que en Shotstack (computeReelClipStartSec), así los subtítulos ya
  * calculados por el pipeline quedan sincronizados sin tocarlos.
+ *
+ * Este archivo arma el formato camioneta y el HTML común; los formatos familiar y premium tienen su
+ * propio armado en compose-familiar.ts y compose-premium.ts.
  */
 
 import type { Segment, SequenceItem, SubtitleBlock } from '@/lib/videos/segmenter'
 import { computeReelClipStartSec } from '@/lib/videos/reel-timeline'
 import {
   ACCENT_COLORS,
+  type CamionetaPlan,
   type Entrance,
-  type MotionBeat,
+  type MotionFormat,
   type MotionPlan,
   type Slot,
 } from './motion-plan'
-
-const W = 1080
-const H = 1920
+import {
+  H,
+  MIN_ON_SCREEN,
+  W,
+  buildCaptionGroups,
+  faceBandPx,
+  overlaps,
+  placeBeats,
+  prng,
+  r3,
+  type Band,
+  type Timed,
+} from './compose-shared'
+import { buildFamiliarData } from './compose-familiar'
+import { buildPremiumData } from './compose-premium'
 
 /** Cierre K-SI NUEVOS que se agrega después del último corte. */
 export const CLOSING_SEC = 2.4
@@ -27,6 +43,12 @@ const CAPTION_Y = 1430
 const CAPTION_SIZE: Record<string, number> = { anton: 92, russo: 72, montserrat: 64 }
 
 const SLOT_Y: Record<Slot, number> = { arriba: 330, centro: 800, abajo: 1180 }
+/** Alto que ocupa cada franja (títulos grandes y placas), para no ponerla sobre una cara. */
+const SLOT_BAND: Record<Slot, Band> = {
+  arriba: { top: 190, bottom: 470 },
+  centro: { top: 660, bottom: 940 },
+  abajo: { top: 1040, bottom: 1320 },
+}
 const SLOT_ORDER: Slot[] = ['arriba', 'centro', 'abajo']
 const TITLE_SIZE = { gigante: 290, grande: 190, mediano: 130 } as const
 
@@ -61,6 +83,18 @@ export function computeReelTimeline(sequence: SequenceItem[]): ReelTimeline {
   })
   for (let i = 0; i + 1 < cuts.length; i++) cuts[i]!.visibleEnd = Math.min(cuts[i]!.end, cuts[i + 1]!.start)
   return { cuts, contentSec, totalSec: Number((contentSec + CLOSING_SEC).toFixed(3)) }
+}
+
+/**
+ * Tramos del Reel sin voz (tomas SOLO PLANO y el cierre): ahí la música sube para que no se sienta vacío.
+ */
+export function musicSwellRanges(timeline: ReelTimeline, segments: Segment[]): [number, number][] {
+  const visual = new Set(segments.filter((s) => s.source_kind === 'visual_only').map((s) => s.segment_id))
+  const ranges: [number, number][] = timeline.cuts
+    .filter((c) => visual.has(c.item.segment_id) && c.visibleEnd - c.start > 0.6)
+    .map((c) => [c.start, c.visibleEnd])
+  ranges.push([timeline.contentSec, timeline.totalSec])
+  return ranges
 }
 
 /** Tramos de cada clip original que usa el Reel: [inicio, fin] en segundos del clip. */
@@ -100,7 +134,8 @@ function tailSource(timeline: ReelTimeline, clipDurationsSec: Map<number, number
 
 // ─── Datos para el runtime (reel.js) ─────────────────────────────────────────
 
-export interface ReelData {
+export interface CamionetaData {
+  format: 'camioneta'
   duration: number
   accent: string
   material: string
@@ -122,7 +157,54 @@ export interface ReelData {
   closing: { start: number; end: number; brand: string; place: string; cta: string }
 }
 
-export type SfxKind = 'whoosh' | 'pop' | 'impacto'
+/**
+ * Efectos de sonido. whoosh, pop e impacto son los de la biblioteca de K-SI (camioneta); el resto viene
+ * con el motor (reels-motion/sfx) y los usan los formatos familiar y premium.
+ */
+export const SFX_KINDS = [
+  'whoosh',
+  'pop',
+  'impacto',
+  'whoosh_soft',
+  'pop_hi',
+  'click',
+  'ding',
+  'shimmer',
+  'tick',
+  'boom',
+  'thump',
+  'shutter',
+  'typing',
+  'hit',
+  'riser',
+] as const
+export type SfxKind = (typeof SFX_KINDS)[number]
+/** Duración de cada efecto en la composición (s). */
+const SFX_LEN: Record<SfxKind, number> = {
+  whoosh: 0.6,
+  pop: 0.6,
+  impacto: 0.6,
+  whoosh_soft: 0.85,
+  pop_hi: 0.15,
+  click: 0.05,
+  ding: 1.6,
+  shimmer: 2,
+  tick: 0.05,
+  boom: 2.4,
+  thump: 0.5,
+  shutter: 0.35,
+  typing: 0.9,
+  hit: 0.9,
+  riser: 1.4,
+}
+export type SfxCue = { kind: SfxKind; at: number; volume?: number }
+
+/** Lo que arma cada formato: datos para su runtime, efectos y un resumen para el log. */
+export interface FormatBuild {
+  data: { duration: number }
+  sfx: SfxCue[]
+  summary: string
+}
 
 export interface ComposeInput {
   sequence: SequenceItem[]
@@ -139,14 +221,8 @@ export interface ComposeInput {
   /** Efectos disponibles (ruta relativa); los que falten simplemente no suenan. */
   sfxFiles: Partial<Record<SfxKind, string>>
   seed: number
-}
-
-function prng(seed: number) {
-  let s = seed >>> 0 || 1
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0
-    return s / 4294967296
-  }
+  /** Golpes de la música en segundos del Reel (music-beats.ts); vacío si la pista no tiene pulso claro. */
+  beats?: number[]
 }
 
 export function seedFromId(id: string): number {
@@ -155,40 +231,16 @@ export function seedFromId(id: string): number {
   return h >>> 0
 }
 
-const r3 = (n: number) => Number(n.toFixed(3))
-
-const normWord = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9.]+/g, '')
-
-/** Momento del Reel en que se dice `cue` dentro del corte (o null si no está). */
-function cueTime(cut: CutTiming, segment: Segment | undefined, cue: string | null): number | null {
-  if (!cue || !segment) return null
-  const target = normWord(cue.split(/\s+/)[0] ?? '')
-  if (!target) return null
-  const from = cut.sourceStart * 1000 - 60
-  const to = (cut.sourceStart + (cut.end - cut.start)) * 1000
-  const word = segment.words.find((w) => w.start >= from && w.start <= to && normWord(w.text).startsWith(target))
-  if (!word) return null
-  return cut.start + word.start / 1000 - cut.sourceStart - 0.08
-}
-
-type Timed = { start: number; end: number }
-
-/** Lo que ya lleva este tiempo en pantalla puede salir antes para dejar entrar lo nuevo. */
-const MIN_ON_SCREEN = 0.7
-
 /**
  * Reparto de las tres franjas (arriba, centro, abajo) para que dos gráficos no se encimen.
  * Lo nuevo manda: si la franja la ocupa algo que ya se vio lo suficiente, eso sale cuando entra lo nuevo.
  */
 class SlotBook {
   private used: { slot: Slot; start: number; end: number; pieces: Timed[] }[] = []
-  take(preferred: Slot, start: number, end: number): { slot: Slot; hold: Timed[] } | null {
+  /** `face` = cabeza de la persona en el corte: las franjas que la pisan no se usan. */
+  take(preferred: Slot, start: number, end: number, face: Band | null = null): { slot: Slot; hold: Timed[] } | null {
     for (const slot of [preferred, ...SLOT_ORDER.filter((x) => x !== preferred)]) {
+      if (face && overlaps(face, SLOT_BAND[slot])) continue
       const clashes = this.used.filter((u) => u.slot === slot && u.start < end && start < u.end)
       if (!clashes.every((u) => start - u.start >= MIN_ON_SCREEN)) continue
       for (const u of clashes) {
@@ -207,51 +259,14 @@ function slotNear(y: number): Slot {
   return SLOT_ORDER.reduce((best, s) => (Math.abs(SLOT_Y[s] - y) < Math.abs(SLOT_Y[best] - y) ? s : best), 'centro')
 }
 
-function buildCaptionGroups(blocks: SubtitleBlock[], highlightPhrases: string[], until: number) {
-  const keyWords = new Set(
-    highlightPhrases.flatMap((p) => p.split(/\s+/).map(normWord)).filter((w) => w.length >= 4)
-  )
-  const isKey = (text: string) => {
-    const n = normWord(text)
-    return /\d/.test(n) || keyWords.has(n)
-  }
-  const groups = blocks
-    .filter((b) => b.text?.trim() && b.duration > 0.05 && b.time < until)
-    .sort((a, b) => a.time - b.time)
-    .map((b) => {
-      const start = r3(b.time)
-      const end = r3(Math.min(until, b.time + b.duration))
-      const words =
-        b.words && b.words.length > 0
-          ? b.words.map((w) => ({ text: w.text, start: r3(w.start), end: r3(w.end), key: isKey(w.text) }))
-          : [{ text: b.text, start, end, key: false }]
-      return { start, end, words }
-    })
-  // En los cortes con solape dos frases pueden coincidir: la anterior se corta cuando entra la siguiente.
-  return groups.filter((g, i) => {
-    const next = groups[i + 1]
-    if (next && next.start < g.end) {
-      g.end = next.start
-      g.words = g.words.filter((w) => w.start < g.end - 0.05)
-      for (const w of g.words) w.end = Math.min(w.end, g.end)
-    }
-    return g.words.length > 0 && g.end - g.start >= 0.12
-  })
-}
-
-export function buildReelData(
-  input: ComposeInput,
-  timeline: ReelTimeline
-): { data: ReelData; sfx: { kind: SfxKind; at: number }[] } {
-  const { plan } = input
+function buildCamionetaData(input: ComposeInput, plan: CamionetaPlan, timeline: ReelTimeline): FormatBuild {
   const rnd = prng(input.seed)
   const accent = ACCENT_COLORS[plan.style.accent]
-  const segById = new Map(input.segments.map((s) => [s.segment_id, s]))
-  const cutBySegment = new Map(timeline.cuts.map((c) => [c.item.segment_id, c]))
   const slots = new SlotBook()
   const until = timeline.contentSec
 
-  const data: ReelData = {
+  const data: CamionetaData = {
+    format: 'camioneta',
     duration: timeline.totalSec,
     accent,
     material: plan.style.material,
@@ -282,7 +297,7 @@ export function buildReelData(
       cta: plan.closing_cta,
     },
   }
-  const sfx: { kind: SfxKind; at: number }[] = []
+  const sfx: SfxCue[] = []
 
   // Movimiento de cámara en cada corte
   timeline.cuts.forEach((c, i) => {
@@ -298,11 +313,12 @@ export function buildReelData(
     Math.round(((plan.hook.origin_x ?? 50) / 100) * W),
     Math.round(((plan.hook.origin_y ?? 80) / 100) * H),
   ]
-  const hookSlot = slots.take('arriba', 0, hookEnd)!
+  // Si la cara del primer corte está arriba, el gancho baja a la franja libre.
+  const hookSlot = slots.take('arriba', 0, hookEnd, faceBandPx(plan.hook.face_top, plan.hook.face_bottom)) ?? slots.take('arriba', 0, hookEnd)!
   const hookTitle = {
     text: plan.hook.word,
     x: W / 2,
-    y: SLOT_Y.arriba,
+    y: SLOT_Y[hookSlot.slot],
     size: TITLE_SIZE.grande,
     start: 0.12,
     end: hookEnd,
@@ -312,7 +328,7 @@ export function buildReelData(
   data.titles.push(hookTitle)
   hookSlot.hold.push(hookTitle)
   if (plan.hook.label) {
-    const kicker = { text: plan.hook.label, x: W / 2, y: SLOT_Y.arriba - 150, start: 0.08, end: hookEnd }
+    const kicker = { text: plan.hook.label, x: W / 2, y: SLOT_Y[hookSlot.slot] - 150, start: 0.08, end: hookEnd }
     data.kickers.push(kicker)
     hookSlot.hold.push(kicker)
   }
@@ -328,24 +344,10 @@ export function buildReelData(
 
   // Beats de Claude, en orden de tiempo. Pueden seguir hasta 1 s después del corte (lo nuevo los saca antes).
   let scanIndex = 0
-  const placed = input.plan.beats
-    .map((b) => {
-      const cut = cutBySegment.get(b.segment_id)
-      if (!cut) return null
-      const cutLen = cut.visibleEnd - cut.start
-      let start =
-        b.kind === 'transicion'
-          ? cut.start
-          : (cueTime(cut, segById.get(b.segment_id), b.cue_word) ?? cut.start + Math.min(b.offset, Math.max(0, cutLen - 0.6)))
-      start = Math.max(cut.start, Math.min(start, cut.visibleEnd - 0.2))
-      const end = Math.min(until, start + b.duration, cut.visibleEnd + 1)
-      if (b.kind !== 'transicion' && end - start < 0.5) return null
-      return { b, cut, start: r3(start), end: r3(end) }
-    })
-    .filter((x): x is { b: MotionBeat; cut: CutTiming; start: number; end: number } => x != null)
-    .sort((a, b) => a.start - b.start)
+  const placed = placeBeats(plan.beats, timeline, input.segments, until)
 
   for (const { b, cut, start, end } of placed) {
+    const face = faceBandPx(b.face_top, b.face_bottom)
     switch (b.kind) {
       case 'transicion': {
         const at = r3(cut.start)
@@ -363,7 +365,7 @@ export function buildReelData(
         break
       }
       case 'titulo_3d': {
-        const taken = slots.take(b.slot ?? 'arriba', start, end)
+        const taken = slots.take(b.slot ?? 'arriba', start, end, face)
         if (!taken) break
         const entrance = b.entrance ?? 'caer'
         const title = {
@@ -385,7 +387,7 @@ export function buildReelData(
         break
       }
       case 'placa': {
-        const taken = slots.take(b.slot ?? 'centro', start, end)
+        const taken = slots.take(b.slot ?? 'centro', start, end, face)
         if (!taken) break
         const left = rnd() > 0.5
         const plate = {
@@ -425,7 +427,7 @@ export function buildReelData(
       }
       case 'ocupantes': {
         if (b.count == null) break
-        const taken = slots.take(b.slot ?? 'centro', start, end)
+        const taken = slots.take(b.slot ?? 'centro', start, end, face)
         if (!taken) break
         const y = SLOT_Y[taken.slot]
         const number = { text: String(b.count), x: 200, y, size: 260, start, end, entrance: b.entrance ?? 'golpe', seed: Math.floor(rnd() * 1000) }
@@ -441,7 +443,7 @@ export function buildReelData(
       case 'comentario': {
         // La caja necesita tiempo para escribirse: al menos 2,4 s.
         const boxEnd = r3(Math.max(end, Math.min(until, start + 2.4)))
-        const taken = slots.take(b.slot ?? 'centro', start, boxEnd)
+        const taken = slots.take(b.slot ?? 'centro', start, boxEnd, face)
         if (!taken) break
         const comment = { text: b.text, y: SLOT_Y[taken.slot] - 70, start, end: boxEnd }
         data.comments.push(comment)
@@ -453,16 +455,38 @@ export function buildReelData(
   }
 
   sfx.push({ kind: 'whoosh', at: r3(until - 0.1) })
-  return { data, sfx }
+  return {
+    data,
+    sfx,
+    summary:
+      `${data.titles.length} títulos 3D, ${data.plates.length} placas, ${data.scans.length} scans, ` +
+      `${data.mudWipes.length + data.flashes.length + data.shakes.length} transiciones, ${data.captions.groups.length} subtítulos`,
+  }
+}
+
+/** Datos del runtime según el formato del plan. */
+export function buildFormatData(input: ComposeInput, timeline: ReelTimeline): FormatBuild {
+  const { plan } = input
+  if (plan.format === 'familiar') return buildFamiliarData(input, plan, timeline)
+  if (plan.format === 'premium') return buildPremiumData(input, plan, timeline)
+  return buildCamionetaData(input, plan, timeline)
+}
+
+/** Hoja de estilos y script de cada formato (dentro de runtime/). */
+const RUNTIME_ENTRY: Record<MotionFormat, { css: string[]; script: string }> = {
+  camioneta: { css: ['kit.css'], script: 'reel.js' },
+  familiar: { css: ['kit.css', 'familiar.css'], script: 'familiar.js' },
+  premium: { css: ['kit.css', 'premium.css'], script: 'premium.js' },
 }
 
 // ─── HTML ─────────────────────────────────────────────────────────────────────
 
 const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
-export function composeMotionReel(input: ComposeInput): { html: string; data: ReelData; timeline: ReelTimeline } {
+export function composeMotionReel(input: ComposeInput): { html: string; summary: string; timeline: ReelTimeline } {
   const timeline = computeReelTimeline(input.sequence)
-  const { data, sfx } = buildReelData(input, timeline)
+  const { data, sfx, summary } = buildFormatData(input, timeline)
+  const entry = RUNTIME_ENTRY[input.plan.format]
 
   const media: string[] = []
   const fileFor = (clip: number) => input.clipFiles.get(clip)
@@ -479,7 +503,7 @@ export function composeMotionReel(input: ComposeInput): { html: string; data: Re
       ? `data-has-audio="true" data-volume="${input.dialogueVolume.toFixed(3)}" data-fade-out="${fadeOut}"`
       : 'muted'
     media.push(
-      `<div class="shot" style="z-index:${z++}"><div class="cam" id="cam${i}"><video id="v${i}" class="media clip" src="${attr(f.file)}" ` +
+      `<div class="shot" id="shot${i}" style="z-index:${z++}"><div class="cam" id="cam${i}"><video id="v${i}" class="media clip" src="${attr(f.file)}" ` +
         `data-start="${r3(c.start)}" data-duration="${dur}" data-media-start="${mediaStart}" ${audio} playsinline></video></div></div>`
     )
     const ov = c.item.visual_overlay
@@ -516,7 +540,8 @@ export function composeMotionReel(input: ComposeInput): { html: string; data: Re
     .filter((s) => input.sfxFiles[s.kind] && s.at >= 0 && s.at < timeline.totalSec - 0.3)
     .forEach((s, i) => {
       audio.push(
-        `<audio id="sfx${i}" class="clip" src="${attr(input.sfxFiles[s.kind]!)}" data-start="${r3(s.at)}" data-duration="0.6" data-volume="0.4"></audio>`
+        `<audio id="sfx${i}" class="clip" src="${attr(input.sfxFiles[s.kind]!)}" data-start="${r3(s.at)}" ` +
+          `data-duration="${SFX_LEN[s.kind]}" data-volume="${(s.volume ?? 0.4).toFixed(2)}"></audio>`
       )
     })
 
@@ -525,7 +550,7 @@ export function composeMotionReel(input: ComposeInput): { html: string; data: Re
 <html>
 <head>
 <meta charset="utf-8">
-<link rel="stylesheet" href="runtime/kit.css">
+${entry.css.map((f) => `<link rel="stylesheet" href="runtime/${f}">`).join('\n')}
 </head>
 <body>
 <div id="root" data-composition-id="root" data-width="${W}" data-height="${H}" data-duration="${timeline.totalSec}">
@@ -541,9 +566,9 @@ export function composeMotionReel(input: ComposeInput): { html: string; data: Re
 </div>
 <script id="reel-data" type="application/json">${json}</script>
 <script src="runtime/vendor/gsap.min.js"></script>
-<script type="module" src="runtime/reel.js"></script>
+<script type="module" src="runtime/${entry.script}"></script>
 </body>
 </html>
 `
-  return { html, data, timeline }
+  return { html, summary, timeline }
 }

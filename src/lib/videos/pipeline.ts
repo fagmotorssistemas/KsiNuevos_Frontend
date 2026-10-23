@@ -32,6 +32,7 @@ import type { VideoClipKind, CanonicalVehicleMeta, ReelRenderEngine } from './cl
 import {
   defaultClipKinds,
   renderEngineFromPipelineMeta,
+  motionFormatFromPipelineMeta,
   isPipelineInputMeta,
   clipRotateAnglesFromPipelineMeta,
   captionStyleVersionFromPipelineMeta,
@@ -89,7 +90,13 @@ import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-br
 import { extractSegmentFrames } from './segment-frames'
 import { buildPreviousReelsBlock } from './previous-reels'
 import { normalizeVisualPlan } from './visual-plan'
-import { defaultMotionPlan, normalizeMotionPlan } from '@/lib/reels-motion/motion-plan'
+import {
+  defaultMotionPlan,
+  normalizeMotionPlan,
+  resolveMotionFormat,
+  MOTION_FORMAT_LABELS,
+  type MotionFormat,
+} from '@/lib/reels-motion/motion-plan'
 import {
   isMotionRenderAvailable,
   motionWorkDir,
@@ -128,6 +135,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
   manualClipOrderIndicesRaw?: number[]
   forceAllManualOrderClips?: boolean
   renderEngine?: ReelRenderEngine
+  motionFormat?: MotionFormat | null
 }> {
   const supabase = getServiceClient()
   const { data, error } = await supabase
@@ -167,6 +175,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
     manualClipOrderIndicesRaw,
     forceAllManualOrderClips,
     renderEngine: renderEngineFromPipelineMeta(sc),
+    motionFormat: motionFormatFromPipelineMeta(sc),
   }
 }
 
@@ -182,6 +191,50 @@ function resolveMotionMode(jobId: string, engine: ReelRenderEngine | undefined, 
     return false
   }
   return true
+}
+
+/**
+ * Formato Motion 3D del Reel: el elegido en el modal o, si quedó en automático, el que corresponde al
+ * vehículo del inventario (carrocería, marca y precio); sin vehículo, el de la marca/modelo escritos.
+ */
+async function resolveJobMotionFormat(
+  jobId: string,
+  chosen: MotionFormat | null | undefined,
+  vehicleId: string | null | undefined,
+  canonicalVehicle: CanonicalVehicleMeta | null | undefined
+): Promise<MotionFormat> {
+  if (chosen) {
+    console.log(`[VideoV2Pipeline][${jobId}][Motion3D] Formato elegido en el modal: ${MOTION_FORMAT_LABELS[chosen]}`)
+    return chosen
+  }
+  let row: { brand: string | null; model: string | null; type_body: string | null; price: number | null } | null = null
+  if (vehicleId) {
+    const { data } = await getServiceClient()
+      .from('inventoryoracle')
+      .select('brand, model, type_body, price')
+      .eq('id', vehicleId)
+      .maybeSingle()
+    row = data
+  }
+  const format = resolveMotionFormat({
+    brand: row?.brand ?? canonicalVehicle?.brand,
+    model: row?.model ?? canonicalVehicle?.model,
+    typeBody: row?.type_body,
+    price: row?.price && row.price > 0 ? row.price : null,
+  })
+  console.log(
+    `[VideoV2Pipeline][${jobId}][Motion3D] Formato automático: ${MOTION_FORMAT_LABELS[format]}` +
+      (row ? ` (inventario: ${row.type_body ?? 'sin carrocería'}, ${row.brand ?? ''}, $${row.price ?? 0})` : ' (sin vehículo del inventario)')
+  )
+  return format
+}
+
+/** Kilometraje del vehículo en el inventario (null si no hay vehículo o está en 0, sin registrar). */
+async function fetchInventoryMileageKm(vehicleId: string | null | undefined): Promise<number | null> {
+  if (!vehicleId) return null
+  const { data } = await getServiceClient().from('inventoryoracle').select('mileage').eq('id', vehicleId).maybeSingle()
+  const km = Number(data?.mileage)
+  return Number.isFinite(km) && km > 0 ? km : null
 }
 
 /** Lanza el render Motion 3D en segundo plano (varios minutos) y cierra el job al terminar. */
@@ -758,8 +811,12 @@ export async function runSingleVideoPipelineFromStorage(
     if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
     geminiOpts.assemblyTranscriptDump = assemblyDump
     if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
+    geminiOpts.mileageKm = await fetchInventoryMileageKm(ctx.vehicleId)
     const motionSingle = resolveMotionMode(jobId, ctx.renderEngine, false)
-    if (motionSingle) geminiOpts.motion = true
+    const motionFormatSingle = motionSingle
+      ? await resolveJobMotionFormat(jobId, ctx.motionFormat, ctx.vehicleId, ctx.canonicalVehicle)
+      : null
+    if (motionFormatSingle) geminiOpts.motion = motionFormatSingle
     const previousReelsSingle = await buildPreviousReelsBlock(getServiceClient(), jobId)
     if (previousReelsSingle) geminiOpts.previousReelsBlock = previousReelsSingle
 
@@ -865,12 +922,12 @@ export async function runSingleVideoPipelineFromStorage(
       brandMentionTimeSec
     )
 
-    if (motionSingle) {
+    if (motionFormatSingle) {
       startMotionRender(jobId, {
         sequence: analysis.sequence,
         segments,
         subtitleBlocks,
-        plan: analysis.motion_plan ?? defaultMotionPlan(ctx.canonicalVehicle?.model),
+        plan: analysis.motion_plan ?? defaultMotionPlan(motionFormatSingle, ctx.canonicalVehicle),
         highlightPhrases: (analysis.caption_highlights ?? []).map((h) => h.phrase),
         clipUrls,
         musicUrl: musicTrackUrl,
@@ -1370,7 +1427,10 @@ export async function runMultipleClipsPipelineFromStorage(
       ctx.renderEngine,
       voiceOverBaseClipIndex != null || voiceOverAudioPath != null
     )
-    if (motionMulti) geminiOpts.motion = true
+    const motionFormatMulti = motionMulti
+      ? await resolveJobMotionFormat(jobId, ctx.motionFormat, ctx.vehicleId, ctx.canonicalVehicle)
+      : null
+    if (motionFormatMulti) geminiOpts.motion = motionFormatMulti
     if (voiceOverBaseClipIndex != null) {
       geminiOpts.manualVoiceOverBaseClipIndex = voiceOverBaseClipIndex
     }
@@ -1382,6 +1442,7 @@ export async function runMultipleClipsPipelineFromStorage(
     if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
     geminiOpts.assemblyTranscriptDump = assemblyDump
     if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
+    geminiOpts.mileageKm = await fetchInventoryMileageKm(ctx.vehicleId)
     if (normClipOrder && normClipOrder.length > 0) {
       geminiOpts.manualClipOrderIndices = normClipOrder
       console.log(`[VideoV2Pipeline][${jobId}][B3] Orden manual de clips activo: ${normClipOrder.join(' → ')}`)
@@ -1666,12 +1727,12 @@ export async function runMultipleClipsPipelineFromStorage(
       brandMentionTimeSec
     )
 
-    if (motionMulti) {
+    if (motionFormatMulti) {
       startMotionRender(jobId, {
         sequence: analysis.sequence,
         segments: allSegments,
         subtitleBlocks,
-        plan: analysis.motion_plan ?? defaultMotionPlan(ctx.canonicalVehicle?.model),
+        plan: analysis.motion_plan ?? defaultMotionPlan(motionFormatMulti, ctx.canonicalVehicle),
         highlightPhrases: (analysis.caption_highlights ?? []).map((h) => h.phrase),
         clipUrls: freshClipUrls,
         musicUrl: musicTrackUrl,
@@ -2476,7 +2537,17 @@ export async function rerunRenderForJob(
       sequence: analysis.sequence,
       segments: allSegments,
       subtitleBlocks,
-      plan: analysis.motion_plan ?? defaultMotionPlan(isPipelineInputMeta(sc) ? sc.canonicalVehicle?.model : null),
+      plan:
+        analysis.motion_plan ??
+        defaultMotionPlan(
+          await resolveJobMotionFormat(
+            jobId,
+            motionFormatFromPipelineMeta(sc),
+            vehicleIdFromPipelineMeta(sc),
+            isPipelineInputMeta(sc) ? sc.canonicalVehicle : null
+          ),
+          isPipelineInputMeta(sc) ? sc.canonicalVehicle : null
+        ),
       highlightPhrases: (analysis.caption_highlights ?? []).map((h) => h.phrase),
       clipUrls: freshClipUrls,
       musicUrl: musicTrackUrl,

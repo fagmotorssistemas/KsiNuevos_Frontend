@@ -235,6 +235,8 @@ export function CreateReelModal({
   const [captionStyleVersion, setCaptionStyleVersion] = useState<'v1' | 'v2'>('v2')
   /** Motor de render: Shotstack (siempre) o Motion 3D (títulos 3D; se renderiza en el servidor local). */
   const [renderEngine, setRenderEngine] = useState<'shotstack' | 'motion'>('shotstack')
+  /** Formato Motion 3D; automático = según carrocería, marca y precio del vehículo del inventario. */
+  const [motionFormat, setMotionFormat] = useState<'auto' | 'camioneta' | 'familiar' | 'premium'>('auto')
   const [motionAvailable, setMotionAvailable] = useState(false)
   useEffect(() => {
     // Motion 3D necesita Chrome y varios minutos de CPU: por ahora solo con `npm run dev` en esta computadora.
@@ -691,6 +693,7 @@ export function CreateReelModal({
       clipOrientations,
       captionStyleVersion,
       ...(motionAvailable && renderEngine === 'motion' ? { renderEngine } : {}),
+      ...(motionAvailable && renderEngine === 'motion' && motionFormat !== 'auto' ? { motionFormat } : {}),
     }
 
     const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -922,6 +925,7 @@ export function CreateReelModal({
         clipOrientations,
         captionStyleVersion,
         ...(motionAvailable && renderEngine === 'motion' ? { renderEngine } : {}),
+        ...(motionAvailable && renderEngine === 'motion' && motionFormat !== 'auto' ? { motionFormat } : {}),
       }
 
       const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -1633,15 +1637,44 @@ export function CreateReelModal({
                         }`}
                       >
                         <span className="block text-sm font-semibold text-gray-900">Motion 3D · beta</span>
-                        <span className="block text-xs text-gray-500 mt-0.5">Títulos 3D, barro, K-SI SCAN</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">Títulos 3D y gráficos animados</span>
                       </button>
                     </div>
                     {renderEngine === 'motion' && (
-                      <p className="mt-2 text-xs text-gray-600 leading-relaxed">
-                        Claude decide los títulos 3D, placas, señalados y transiciones (formato camioneta). El video se
-                        renderiza en esta computadora y tarda unos minutos. No admite voz en off: si la activas, sale
-                        con el estilo clásico.
-                      </p>
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-violet-950">Formato</p>
+                        <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {(
+                            [
+                              ['auto', 'Automático', 'Según el vehículo'],
+                              ['camioneta', 'Camioneta', 'Metal, barro, K-SI SCAN'],
+                              ['familiar', 'Familiar (SUV)', 'Vidrio, contador, asientos'],
+                              ['premium', 'Premium', 'Cromo, oro, cine'],
+                            ] as const
+                          ).map(([value, label, hint]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setMotionFormat(value)}
+                              className={`rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                                motionFormat === value
+                                  ? 'border-violet-500 bg-white ring-2 ring-violet-200'
+                                  : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                              }`}
+                            >
+                              <span className="block text-xs font-semibold text-gray-900">{label}</span>
+                              <span className="block text-[11px] text-gray-500 mt-0.5 leading-tight">{hint}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-xs text-gray-600 leading-relaxed">
+                          Claude decide los gráficos de cada toma sin taparle la cara a quien habla. En automático, las
+                          camionetas van con el formato camioneta, las marcas de lujo o autos de más de $45.000 con el
+                          premium y el resto (SUV, jeep, sedán…) con el familiar. El video se renderiza en esta
+                          computadora y tarda unos minutos. No admite voz en off: si la activas, sale con el estilo
+                          clásico.
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}

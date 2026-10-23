@@ -18,6 +18,7 @@ import {
   normalizeMusicTrimStartSec,
   normalizeReelAudioVolume,
   resolveClipOrientationsForPaths,
+  isReelMotionFormat,
 } from '@/lib/videos/clip-config'
 import {
   normalizeClipOrientationsInput,
@@ -68,6 +69,8 @@ export interface StartJobBody {
   captionStyleVersion?: 'v1' | 'v2' | null
   /** Motor de render: shotstack (por defecto) o motion (Motion 3D local). */
   renderEngine?: 'shotstack' | 'motion' | null
+  /** Formato Motion 3D (camioneta, familiar, premium); sin valor = automático según el vehículo. */
+  motionFormat?: string | null
 }
 
 export type JobStartResult =
@@ -100,6 +103,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     clipOrientations: clipOrientationsRaw,
     captionStyleVersion: captionStyleVersionRaw,
     renderEngine: renderEngineRaw,
+    motionFormat: motionFormatRaw,
   } = body
 
   if (!jobId || !paths?.length) {
@@ -322,6 +326,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
       ? captionStyleVersionRaw
       : undefined
   const renderEngine = renderEngineRaw === 'motion' ? ('motion' as const) : undefined
+  const motionFormat = renderEngine && isReelMotionFormat(motionFormatRaw) ? motionFormatRaw : undefined
 
   const supabase = getServiceClient()
 
@@ -414,6 +419,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
           ...(reelDialogueVolume !== undefined ? { reelDialogueVolume } : {}),
           ...(captionStyleVersion ? { captionStyleVersion } : {}),
           ...(renderEngine ? { renderEngine } : {}),
+          ...(motionFormat ? { motionFormat } : {}),
           ...(resolvedOrientations
             ? {
                 clipOrientations: resolvedOrientations,

@@ -15,13 +15,24 @@ import { resolveFfmpegBinaries, type FfmpegBinaries } from '@/lib/videos/resolve
 import { pickSmartMusicTrimStartSec } from '@/lib/videos/smart-music-trim'
 import { computeReelAudioBalance } from '@/lib/videos/audio-balance'
 import { resolveBrandTitlePopSfxUrl, resolveClipTransitionWhooshUrl } from '@/lib/videos/shotstack'
-import { composeMotionReel, computeReelTimeline, neededClipRanges, seedFromId, type SfxKind } from './composer'
+import {
+  SFX_KINDS,
+  composeMotionReel,
+  computeReelTimeline,
+  musicSwellRanges,
+  neededClipRanges,
+  seedFromId,
+  type SfxKind,
+} from './composer'
+import { detectMusicBeats } from './music-beats'
 import type { MotionPlan } from './motion-plan'
 import { stageMotionRuntime } from './runtime-files'
 
 const HYPERFRAMES_BIN = path.join(process.cwd(), 'node_modules', '.bin', 'hyperframes')
 const RENDER_TIMEOUT_MS = 40 * 60 * 1000
 const TRANSCODE_CONCURRENCY = 2
+/** Cuánto sube la música en las tomas sin habla (× el volumen balanceado con la voz). */
+const MUSIC_SWELL = 1.8
 
 export type MotionProgress = (pct: number, step: string) => Promise<void>
 
@@ -189,33 +200,56 @@ export async function renderMotionReel(input: MotionRenderInput, onProgress: Mot
     dialogueVolume ??= balance.dialogueVolume
   }
   let music: { file: string; trimStartSec: number; volume: number } | null = null
+  let beats: number[] = []
   if (input.musicUrl.trim()) {
+    // Familiar y premium: la música sube en las tomas sin habla y en el cierre (con rampas de 0,35 s).
+    const swells = input.plan.format === 'camioneta' ? [] : musicSwellRanges(timeline, input.segments)
+    const swellFilter = swells.length
+      ? [
+          '-af',
+          `volume='1+${MUSIC_SWELL - 1}*min(1,${swells
+            .map(([a, b]) => `clip((t-${a.toFixed(2)})/0.35,0,1)*clip((${b.toFixed(2)}-t)/0.35,0,1)`)
+            .join('+')})':eval=frame`,
+        ]
+      : []
     try {
       await run(ff.ffmpeg, [
         '-hide_banner', '-loglevel', 'error', '-y', '-ss', musicTrim.toFixed(3), '-i', input.musicUrl,
-        '-t', (timeline.totalSec + 1).toFixed(3), '-vn', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', path.join(dir, 'music.m4a'),
+        '-t', (timeline.totalSec + 1).toFixed(3), '-vn', ...swellFilter, '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
+        path.join(dir, 'music.m4a'),
       ])
       music = { file: 'music.m4a', trimStartSec: 0, volume: musicVolume }
+      if (input.plan.format !== 'camioneta') {
+        beats = await detectMusicBeats(ff.ffmpeg, path.join(dir, 'music.m4a'), timeline.totalSec).catch(() => [])
+        log(beats.length ? `Ritmo de la música: ${beats.length} golpes` : 'La música no tiene un pulso claro: sin pulsos al ritmo')
+      }
     } catch (err) {
       log(`No se pudo preparar la música, sale sin música: ${err instanceof Error ? err.message : err}`)
     }
   }
   log(`Música desde ${musicTrim.toFixed(2)} s · volumen música=${musicVolume} voz=${dialogueVolume}`)
 
+  // Efectos: los del motor (runtime/sfx) para todos; camioneta usa además los de la biblioteca de K-SI.
+  stageMotionRuntime(dir)
   const sfxFiles: Partial<Record<SfxKind, string>> = {}
-  const sfxSources: [SfxKind, string][] = [
-    ['whoosh', resolveClipTransitionWhooshUrl()],
-    ['pop', resolveBrandTitlePopSfxUrl()],
-    ['impacto', resolveBrandTitlePopSfxUrl()],
-  ]
-  for (const [kind, url] of sfxSources) {
-    const file = `sfx/${kind}${path.extname(new URL(url).pathname) || '.mp3'}`
-    if (await downloadTo(url, path.join(dir, file))) sfxFiles[kind] = file
+  for (const kind of SFX_KINDS) {
+    const file = `runtime/sfx/${kind === 'impacto' ? 'boom' : kind}.mp3`
+    if (fs.existsSync(path.join(dir, file))) sfxFiles[kind] = file
+  }
+  if (input.plan.format === 'camioneta') {
+    const sfxSources: [SfxKind, string][] = [
+      ['whoosh', resolveClipTransitionWhooshUrl()],
+      ['pop', resolveBrandTitlePopSfxUrl()],
+      ['impacto', resolveBrandTitlePopSfxUrl()],
+    ]
+    for (const [kind, url] of sfxSources) {
+      const file = `sfx/${kind}${path.extname(new URL(url).pathname) || '.mp3'}`
+      if (await downloadTo(url, path.join(dir, file))) sfxFiles[kind] = file
+    }
   }
 
   // 3. Composición
-  stageMotionRuntime(dir)
-  const { html, data } = composeMotionReel({
+  const { html, summary, timeline: composed } = composeMotionReel({
     sequence: input.sequence,
     segments: input.segments,
     subtitleBlocks: input.subtitleBlocks,
@@ -227,13 +261,10 @@ export async function renderMotionReel(input: MotionRenderInput, onProgress: Mot
     dialogueVolume: dialogueVolume ?? 1,
     sfxFiles,
     seed: seedFromId(jobId),
+    beats,
   })
   fs.writeFileSync(path.join(dir, 'index.html'), html)
-  log(
-    `Composición: ${data.duration.toFixed(1)} s, ${data.titles.length} títulos 3D, ${data.plates.length} placas, ` +
-      `${data.scans.length} scans, ${data.mudWipes.length + data.flashes.length + data.shakes.length} transiciones, ` +
-      `${data.captions.groups.length} subtítulos`
-  )
+  log(`Composición: ${composed.totalSec.toFixed(1)} s, ${summary}`)
 
   // 4. Render
   await onProgress(87, 'Motion 3D: renderizando (puede tardar unos minutos)…')

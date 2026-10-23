@@ -9,6 +9,8 @@ import path from 'node:path'
 
 const ROOT = process.cwd()
 const RUNTIME_DIR = path.join(ROOT, 'reels-motion', 'runtime')
+/** Efectos de sonido propios del motor (formatos familiar y premium). */
+const SFX_DIR = path.join(ROOT, 'reels-motion', 'sfx')
 const NM = path.join(ROOT, 'node_modules')
 
 /** Archivos de three.js que usan las piezas 3D; los imports se reescriben a rutas locales. */
@@ -27,6 +29,16 @@ export const FONT_FILES: Record<string, string> = {
   blackops: '@fontsource/black-ops-one/files/black-ops-one-latin-400-normal.woff',
   anton: '@fontsource/anton/files/anton-latin-400-normal.woff',
   montserrat: '@fontsource/montserrat/files/montserrat-latin-900-normal.woff',
+  // Formato familiar
+  fredoka: '@fontsource/fredoka/files/fredoka-latin-700-normal.woff',
+  fredoka500: '@fontsource/fredoka/files/fredoka-latin-500-normal.woff',
+  poppins: '@fontsource/poppins/files/poppins-latin-800-normal.woff',
+  poppins500: '@fontsource/poppins/files/poppins-latin-500-normal.woff',
+  // Formato premium
+  playfair: '@fontsource/playfair-display/files/playfair-display-latin-700-normal.woff',
+  playfair400: '@fontsource/playfair-display/files/playfair-display-latin-400-normal.woff',
+  montserrat300: '@fontsource/montserrat/files/montserrat-latin-300-normal.woff',
+  montserrat600: '@fontsource/montserrat/files/montserrat-latin-600-normal.woff',
 }
 
 function copyDir(src: string, dest: string) {
@@ -39,10 +51,11 @@ function copyDir(src: string, dest: string) {
   }
 }
 
-/** Deja en `dir` las carpetas runtime/, runtime/vendor/ y runtime/fonts/. */
+/** Deja en `dir` las carpetas runtime/, runtime/vendor/, runtime/fonts/ y runtime/sfx/. */
 export function stageMotionRuntime(dir: string): void {
   const runtimeOut = path.join(dir, 'runtime')
   copyDir(RUNTIME_DIR, runtimeOut)
+  copyDir(SFX_DIR, path.join(runtimeOut, 'sfx'))
 
   const vendor = path.join(runtimeOut, 'vendor')
   fs.mkdirSync(vendor, { recursive: true })
