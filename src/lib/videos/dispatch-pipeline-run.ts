@@ -10,7 +10,8 @@ function pipelineRunOrigins(): string[] {
   if (vercel) origins.push(`https://${vercel}`)
   const site = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? process.env.NEXT_PUBLIC_APP_URL?.trim()
   if (site) origins.push(site.replace(/\/$/, ''))
-  if (process.env.NODE_ENV !== 'production') origins.push('http://localhost:3000')
+  // En dev Next salta al 3001+ si el 3000 está ocupado y deja el puerto real en PORT.
+  if (process.env.NODE_ENV !== 'production') origins.push(`http://localhost:${process.env.PORT || 3000}`)
   return [...new Set(origins)]
 }
 
