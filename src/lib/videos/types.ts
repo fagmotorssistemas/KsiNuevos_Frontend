@@ -1,4 +1,4 @@
-import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
+import type { AiHighlightPhrase, CreativeBrief, ReelEditorUsage } from './claude-editor'
 import type { VisualPlan } from './visual-plan'
 import type { MotionPlan } from '@/lib/reels-motion/motion-plan'
 import type { SequenceItem } from './segmenter'
@@ -64,6 +64,8 @@ export interface ReelEditAnalysisResult {
   caption_highlights?: AiHighlightPhrase[]
   /** Palabras mal transcritas que corrigió Claude; el re-render y el editor las vuelven a aplicar. */
   transcript_fixes?: TranscriptFix[]
+  /** Dirección creativa que Claude escribió antes de cortar. */
+  creative_brief?: CreativeBrief
   /** Estilo visual elegido por Claude; el re-render lo reutiliza. */
   visual_plan?: VisualPlan
   /** Plan de gráficos de un Reel Motion 3D; el re-render lo reutiliza. */

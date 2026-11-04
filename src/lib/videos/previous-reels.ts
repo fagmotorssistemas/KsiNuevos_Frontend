@@ -8,6 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { isPipelineInputMeta } from './clip-config'
 import { normalizeVisualPlan } from './visual-plan'
+import { normalizeCreativeBrief } from './claude-editor'
 import { describeMotionPlan, normalizeMotionPlan } from '@/lib/reels-motion/motion-plan'
 
 const MAX_PREVIOUS_REELS = 3
@@ -20,6 +21,7 @@ type StoredAnalysis = {
   total_duration?: unknown
   visual_plan?: unknown
   motion_plan?: unknown
+  creative_brief?: unknown
 }
 
 type StoredSegment = { segment_id?: unknown; text?: unknown }
@@ -56,7 +58,12 @@ function describeReel(createdAt: string, analysis: StoredAnalysis, segmentMap: u
     typeof analysis.overall_strategy === 'string' && analysis.overall_strategy.trim()
       ? ` — «${clip(analysis.overall_strategy)}»`
       : ''
-  const lines = cuts.slice(0, MAX_CUTS_PER_REEL).map((t, i) => `  ${i + 1}. «${clip(t)}»`)
+  const lines: string[] = []
+  const brief = normalizeCreativeBrief(analysis.creative_brief)
+  if (brief) {
+    lines.push(`  Brief: le habló a «${clip(brief.audience)}»; gancho «${clip(brief.hook)}»; prometió «${clip(brief.promise)}»`)
+  }
+  lines.push(...cuts.slice(0, MAX_CUTS_PER_REEL).map((t, i) => `  ${i + 1}. «${clip(t)}»`))
   if (cuts.length > MAX_CUTS_PER_REEL) lines.push(`  … (${cuts.length - MAX_CUTS_PER_REEL} cortes más)`)
   const plan = normalizeVisualPlan(analysis.visual_plan)
   if (plan) {

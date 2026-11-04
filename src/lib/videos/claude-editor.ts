@@ -9,6 +9,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { getClaudeClient, resolveReelsModel, serverSideFallback } from './claude-client'
+import { REEL_EDITOR_SYSTEM_PROMPT } from './editor-manual'
 import type { SequenceItem } from './segmenter'
 import type { SegmentFrame } from './segment-frames'
 import type { TranscriptFix } from './transcript-fixes'
@@ -44,6 +45,38 @@ export interface AiHighlightPhrase {
   priority: number
 }
 
+/** Dirección creativa que Claude escribe antes de cortar (va primero en la respuesta). */
+export interface CreativeBrief {
+  /** A quién le habla el Reel. */
+  audience: string
+  /** Qué gana el que mira. */
+  promise: string
+  /** Qué pasa en el segundo 0 y por qué detiene el scroll. */
+  hook: string
+  /** Tramos del Reel en orden. */
+  arc: string[]
+  /** Qué se le pide al final. */
+  cta: string
+}
+
+const MAX_BRIEF_CHARS = 280
+const MAX_ARC_STEPS = 6
+
+/** Brief usable (Claude o BD), o null si no trae lo esencial. */
+export function normalizeCreativeBrief(raw: unknown): CreativeBrief | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim().slice(0, MAX_BRIEF_CHARS) : '')
+  const brief: CreativeBrief = {
+    audience: text(o.audience),
+    promise: text(o.promise),
+    hook: text(o.hook),
+    arc: Array.isArray(o.arc) ? o.arc.map(text).filter(Boolean).slice(0, MAX_ARC_STEPS) : [],
+    cta: text(o.cta),
+  }
+  return brief.hook && brief.promise ? brief : null
+}
+
 export interface ReelEditorUsage {
   model: string
   effort: Effort
@@ -60,6 +93,7 @@ export interface ReelEditorResult {
   overall_strategy: string
   voice_over_insert_after_count?: number
   caption_highlights: AiHighlightPhrase[]
+  creative_brief: CreativeBrief | null
   /** Errores de la transcripción en los cortes elegidos (se validan contra el mapa en reel-editor.ts). */
   transcript_fixes: TranscriptFix[]
   visual_plan: VisualPlan | null
@@ -118,6 +152,19 @@ const VISUAL_PLAN_SCHEMA = {
   },
 }
 
+const CREATIVE_BRIEF_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['audience', 'promise', 'hook', 'arc', 'cta'],
+  properties: {
+    audience: { type: 'string' },
+    promise: { type: 'string' },
+    hook: { type: 'string' },
+    arc: { type: 'array', items: { type: 'string' } },
+    cta: { type: 'string' },
+  },
+}
+
 const SEQUENCE_ITEM_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -154,6 +201,7 @@ const EDIT_PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
+    'creative_brief',
     'sequence',
     'total_duration',
     'overall_strategy',
@@ -163,6 +211,8 @@ const EDIT_PLAN_SCHEMA = {
     'visual_plan',
   ],
   properties: {
+    // Primero el brief: Claude decide la historia antes de elegir cortes.
+    creative_brief: CREATIVE_BRIEF_SCHEMA,
     sequence: { type: 'array', items: SEQUENCE_ITEM_WITH_TRANSITION_SCHEMA },
     total_duration: { type: 'number' },
     overall_strategy: { type: 'string' },
@@ -217,6 +267,7 @@ interface RawEditPlan {
   overall_strategy: string
   voice_over_insert_after_count: number | null
   caption_highlights: AiHighlightPhrase[]
+  creative_brief?: unknown
   transcript_fixes?: TranscriptFix[]
   visual_plan?: unknown
   motion_plan?: unknown
@@ -254,6 +305,7 @@ export async function requestReelEditPlan(
     model,
     max_tokens: MAX_OUTPUT_TOKENS,
     ...serverSideFallback(model),
+    system: [{ type: 'text', text: REEL_EDITOR_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     output_config: {
       effort,
       format: { type: 'json_schema', schema: editPlanSchema(opts.motion ?? null) },
@@ -299,6 +351,7 @@ export async function requestReelEditPlan(
       ? { voice_over_insert_after_count: raw.voice_over_insert_after_count }
       : {}),
     caption_highlights: raw.caption_highlights.slice(0, 8),
+    creative_brief: normalizeCreativeBrief(raw.creative_brief),
     transcript_fixes: raw.transcript_fixes ?? [],
     visual_plan: normalizeVisualPlan(raw.visual_plan),
     motion_plan: opts.motion ? normalizeMotionPlan(raw.motion_plan, opts.motion) : null,

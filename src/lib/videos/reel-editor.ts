@@ -9,7 +9,12 @@
 import type { Segment, SequenceItem, SequenceVisualOverlay } from './segmenter'
 import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
 import { defaultClipKinds } from './clip-config'
-import { requestReelEditPlan, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
+import {
+  requestReelEditPlan,
+  type AiHighlightPhrase,
+  type CreativeBrief,
+  type ReelEditorUsage,
+} from './claude-editor'
 import type { SegmentFrame } from './segment-frames'
 import { normalizeTransitionFlags, transitionBoundaries } from './reel-timeline'
 import { normalizeTranscriptFixes, type TranscriptFix } from './transcript-fixes'
@@ -31,6 +36,8 @@ export interface ReelEditAnalysis {
   caption_highlights?: AiHighlightPhrase[]
   /** Palabras mal transcritas en los cortes elegidos; se corrigen antes de armar los subtítulos. */
   transcript_fixes?: TranscriptFix[]
+  /** Dirección creativa que Claude escribió antes de cortar; la ven los próximos Reels del mismo auto. */
+  creative_brief?: CreativeBrief
   /** Estilo visual del Reel (gancho, tarjetas, transiciones…) que dibuja shotstack.ts. */
   visual_plan?: VisualPlan
   /** Plan de gráficos de un Reel Motion 3D (lo dibuja reels-motion/composer.ts). */
@@ -1172,6 +1179,7 @@ function buildOutputBlock(manual: boolean, motion: boolean): string {
     ? ' y visual_overlay (objeto o null)'
     : ', visual_overlay (objeto o null) y transition_after (ver dirección visual)'
   return `FORMATO DE LA RESPUESTA (JSON):
+- "creative_brief" va primero y guía todo lo demás. "audience" = a quién le habla, concreto (ej. "papá que trabaja en el campo y saca a la familia el fin de semana"); "promise" = qué gana el que mira, en una frase; "hook" = qué se ve, se lee y se oye en el segundo 0 y por qué detiene el scroll; "arc" = 3 a 5 tramos del Reel en orden, cada uno con su tiempo aproximado (ej. "0–3 s: …"); "cta" = qué se le pide al final.
 - "sequence": los cortes en el orden del Reel. En cada uno: segment_id, clip_index, trim_start, trim_end, trim_duration, order, reason (por qué va ese corte; si lleva visual_overlay, qué se ve)${lastFields}.
 - "total_duration": suma de trim_duration. "overall_strategy": una frase sobre la estrategia editorial.
 - "voice_over_insert_after_count": ${manual ? 'obligatorio (ver bloque de voz en off)' : 'null (no hay bloque de voz en off)'}.
@@ -1214,7 +1222,7 @@ function buildEditorPrompt(opts: {
   const manualOrderBlock =
     (opts.manualClipOrderIndices?.length ?? 0) > 0 ? buildManualClipOrderPromptBlock(opts.manualClipOrderIndices!) : ''
 
-  return `Eres el editor de video de K-SI, concesionario de autos seminuevos en Cuenca (Ecuador). Un asesor grabó estos clips para vender el vehículo. Arma con ellos el Reel vertical para Instagram y TikTok que mejor venda este auto: tú decides qué partes usar, en qué orden, cuánto dura y cómo abre y cierra.
+  return `Un asesor grabó estos clips para vender el vehículo. Arma con ellos el Reel vertical que mejor venda este auto, siguiendo tu manual de editor: tú decides qué partes usar, en qué orden, cuánto dura y cómo abre y cierra.
 
 ${framesNote}
 
@@ -1367,6 +1375,14 @@ export async function analyzeSegments(
     console.log(`[VideoV2Pipeline][${jobId}][Claude] Transiciones: ${cuts.length > 0 ? cuts.join(', ') : 'ninguna (solo cortes secos)'}`)
   }
 
+  if (plan.creative_brief) {
+    const b = plan.creative_brief
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Claude] Brief: le habla a «${b.audience}»; promete «${b.promise}»; ` +
+        `gancho «${b.hook}»; recorrido: ${b.arc.join(' | ')}; cierre «${b.cta}»`
+    )
+  }
+
   // Correcciones de la transcripción: solo las que existen tal cual en el corte que nombran.
   const transcriptFixes = normalizeTranscriptFixes(plan.transcript_fixes, allSegments)
   if (transcriptFixes.length > 0 || plan.transcript_fixes.length > 0) {
@@ -1381,6 +1397,7 @@ export async function analyzeSegments(
     sequence,
     caption_highlights: plan.caption_highlights,
     ...(transcriptFixes.length > 0 ? { transcript_fixes: transcriptFixes } : {}),
+    ...(plan.creative_brief ? { creative_brief: plan.creative_brief } : {}),
     ...(plan.visual_plan ? { visual_plan: plan.visual_plan } : {}),
     ...(plan.motion_plan ? { motion_plan: plan.motion_plan } : {}),
     editor_usage: plan.usage,

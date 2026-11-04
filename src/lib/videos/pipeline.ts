@@ -106,7 +106,7 @@ import {
   type MotionRenderInput,
 } from '@/lib/reels-motion/render-motion-reel'
 import fs from 'node:fs'
-import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
+import { normalizeCreativeBrief, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
 
 /**
  * false = pipeline usa solo lo dicho en el audio (Assembly). No enlaza guión de marketing
@@ -1904,6 +1904,7 @@ function coerceReelAnalysisFromUnknown(raw: unknown, jobId: string): ReelEditAna
     ...(normalizeTranscriptFixes(o.transcript_fixes).length > 0
       ? { transcript_fixes: normalizeTranscriptFixes(o.transcript_fixes) }
       : {}),
+    ...(normalizeCreativeBrief(o.creative_brief) ? { creative_brief: normalizeCreativeBrief(o.creative_brief)! } : {}),
     ...(normalizeVisualPlan(o.visual_plan) ? { visual_plan: normalizeVisualPlan(o.visual_plan)! } : {}),
     ...(normalizeMotionPlan(o.motion_plan) ? { motion_plan: normalizeMotionPlan(o.motion_plan)! } : {}),
   }
