@@ -256,6 +256,7 @@ function startMotionRender(jobId: string, input: Omit<MotionRenderInput, 'jobId'
         status: 'completed',
         final_video_url: url,
         final_video_duration: Number(durationSec.toFixed(2)),
+        error_message: null,
         progress_percentage: 100,
         current_step: 'Video listo (Motion 3D)',
       })
@@ -691,6 +692,7 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
           status: 'completed',
           final_video_url: finalUrl ?? undefined,
           final_video_duration: render.duration ?? null,
+          error_message: null,
           progress_percentage: 100,
           current_step: 'Video listo (confirmado por polling Shotstack)',
         })

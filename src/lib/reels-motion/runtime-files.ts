@@ -41,6 +41,24 @@ export const FONT_FILES: Record<string, string> = {
   montserrat600: '@fontsource/montserrat/files/montserrat-latin-600-normal.woff',
 }
 
+const GSAP_FILE = 'gsap/dist/gsap.min.js'
+
+/** Nombre del paquete de un archivo de node_modules (`@fontsource/fredoka/files/x.woff` → `@fontsource/fredoka`). */
+function packageOf(file: string): string {
+  const parts = file.split('/')
+  return file.startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0]!
+}
+
+/**
+ * Paquetes de node_modules que le faltan al runtime (vacío si están todos). Se revisa antes de
+ * preparar los clips para fallar rápido y con un mensaje claro, no con un ENOENT a mitad del render.
+ */
+export function missingMotionRuntimePackages(): string[] {
+  const files = [GSAP_FILE, ...THREE_FILES.map(([from]) => from), ...Object.values(FONT_FILES)]
+  const missing = files.filter((f) => !fs.existsSync(path.join(NM, f)))
+  return [...new Set(missing.map(packageOf))]
+}
+
 function copyDir(src: string, dest: string) {
   fs.mkdirSync(dest, { recursive: true })
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -59,7 +77,7 @@ export function stageMotionRuntime(dir: string): void {
 
   const vendor = path.join(runtimeOut, 'vendor')
   fs.mkdirSync(vendor, { recursive: true })
-  fs.copyFileSync(path.join(NM, 'gsap/dist/gsap.min.js'), path.join(vendor, 'gsap.min.js'))
+  fs.copyFileSync(path.join(NM, GSAP_FILE), path.join(vendor, 'gsap.min.js'))
   for (const [from, to] of THREE_FILES) {
     const code = fs
       .readFileSync(path.join(NM, from), 'utf8')

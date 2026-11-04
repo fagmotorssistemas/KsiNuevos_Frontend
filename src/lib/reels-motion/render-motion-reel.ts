@@ -26,7 +26,7 @@ import {
 } from './composer'
 import { detectMusicBeats } from './music-beats'
 import type { MotionPlan } from './motion-plan'
-import { stageMotionRuntime } from './runtime-files'
+import { missingMotionRuntimePackages, stageMotionRuntime } from './runtime-files'
 
 const HYPERFRAMES_BIN = path.join(process.cwd(), 'node_modules', '.bin', 'hyperframes')
 const RENDER_TIMEOUT_MS = 40 * 60 * 1000
@@ -154,6 +154,10 @@ export async function renderMotionReel(input: MotionRenderInput, onProgress: Mot
   const ff = await resolveFfmpegBinaries()
   if (!ff) throw new Error('Motion 3D necesita ffmpeg y ffprobe instalados (o FFMPEG_PATH / FFPROBE_PATH).')
   if (!fs.existsSync(HYPERFRAMES_BIN)) throw new Error('Falta el CLI de HyperFrames: corre npm install.')
+  const missing = missingMotionRuntimePackages()
+  if (missing.length > 0) {
+    throw new Error(`Faltan dependencias de Motion 3D (${missing.join(', ')}): corre npm install y vuelve a renderizar.`)
+  }
 
   const dir = motionWorkDir(jobId)
   fs.rmSync(dir, { recursive: true, force: true })
