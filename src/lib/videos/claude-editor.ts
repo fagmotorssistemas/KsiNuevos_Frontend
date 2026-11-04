@@ -7,7 +7,8 @@
  * y cada llamada deja en el log los tokens y el costo aproximado.
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
+import { getClaudeClient, resolveReelsModel, serverSideFallback } from './claude-client'
 import type { SequenceItem } from './segmenter'
 import type { SegmentFrame } from './segment-frames'
 import type { TranscriptFix } from './transcript-fixes'
@@ -23,7 +24,6 @@ import {
 } from './visual-plan'
 import { motionPlanSchema, normalizeMotionPlan, type MotionFormat, type MotionPlan } from '@/lib/reels-motion/motion-plan'
 
-const DEFAULT_MODEL = 'claude-opus-5-5'
 const DEFAULT_EFFORT: Effort = 'medium'
 const MAX_OUTPUT_TOKENS = 16_000
 
@@ -222,15 +222,6 @@ interface RawEditPlan {
   motion_plan?: unknown
 }
 
-let client: Anthropic | null = null
-function getClient(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY?.trim()) {
-    throw new Error('Falta ANTHROPIC_API_KEY en las variables de entorno (Claude edita los Reels).')
-  }
-  client ??= new Anthropic()
-  return client
-}
-
 function resolveEffort(): Effort {
   const raw = process.env.CLAUDE_REELS_EFFORT?.trim().toLowerCase()
   return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : DEFAULT_EFFORT
@@ -256,18 +247,13 @@ export async function requestReelEditPlan(
   jobId: string,
   opts: { motion?: MotionFormat | null } = {}
 ): Promise<ReelEditorResult> {
-  const model = process.env.CLAUDE_REELS_MODEL?.trim() || DEFAULT_MODEL
+  const model = resolveReelsModel()
   const effort = resolveEffort()
 
-  // Si el modelo rechaza el pedido, la API lo reintenta en el modelo de respaldo recomendado (Haiku no lo admite).
-  const fallback = /^claude-(opus|sonnet|fable)/.test(model)
-    ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }
-    : {}
-
-  const response = await getClient().beta.messages.create({
+  const response = await getClaudeClient('Claude edita los Reels').beta.messages.create({
     model,
     max_tokens: MAX_OUTPUT_TOKENS,
-    ...fallback,
+    ...serverSideFallback(model),
     output_config: {
       effort,
       format: { type: 'json_schema', schema: editPlanSchema(opts.motion ?? null) },

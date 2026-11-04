@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import type Anthropic from '@anthropic-ai/sdk'
+import { getClaudeClient, resolveReelsModel, serverSideFallback } from './claude-client'
 
 export interface VehicleCaptionInput {
   marca: string
@@ -11,8 +12,8 @@ export interface VehicleCaptionInput {
   tipo: string
 }
 
-
-const MODEL = 'gemini-flash-latest'
+/** Texto corto con formato fijo: no necesita pensar mucho. */
+const CAPTION_EFFORT = 'low' as const
 
 function buildPrompt(v: VehicleCaptionInput): string {
   return `Genera un caption para Instagram y Facebook para la venta de un vehículo seminuevo con las siguientes características:
@@ -48,17 +49,31 @@ https://maps.app.goo.gl/ukJnbKb5kXvtewXX8
 Responde ÚNICAMENTE con el caption formateado, sin comillas, sin explicación previa ni posterior.`
 }
 
-/**
- * Genera caption con Gemini (misma dependencia que el análisis V2).
- */
+/** Texto de la publicación de Instagram y Facebook del Reel, con Claude (mismo modelo que el montaje). */
 export async function generateCaption(vehicle: VehicleCaptionInput): Promise<string> {
-  const key = process.env.GEMINI_API_KEY
-  if (!key) throw new Error('GEMINI_API_KEY no configurada')
+  const model = resolveReelsModel()
+  const response = await getClaudeClient('Claude escribe el texto de las publicaciones').beta.messages.create({
+    model,
+    max_tokens: 16000,
+    ...serverSideFallback(model),
+    output_config: { effort: CAPTION_EFFORT },
+    messages: [{ role: 'user', content: buildPrompt(vehicle) }],
+  })
 
-  const genAI = new GoogleGenerativeAI(key)
-  const model = genAI.getGenerativeModel({ model: MODEL })
-  const result = await model.generateContent(buildPrompt(vehicle))
-  const text = result.response.text().trim()
-  if (!text) throw new Error('Gemini devolvió caption vacío')
+  if (response.stop_reason === 'refusal') {
+    throw new Error(`Claude rechazó escribir la publicación (${response.stop_details?.category ?? 'sin categoría'}).`)
+  }
+  if (response.stop_reason === 'max_tokens') {
+    throw new Error('La publicación de Claude se cortó por largo.')
+  }
+  const text = response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+    .trim()
+  if (!text) throw new Error('Claude devolvió la publicación vacía')
+  console.log(
+    `[Caption][Claude] ${response.model}: ${response.usage.input_tokens} tokens entrada, ${response.usage.output_tokens} salida`
+  )
   return text.replace(/^["']|["']$/g, '').trim()
 }
