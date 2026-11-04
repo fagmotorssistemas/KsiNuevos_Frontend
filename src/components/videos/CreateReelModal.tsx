@@ -1473,12 +1473,12 @@ export function CreateReelModal({
                               }}
                             >
                               <option value="">—</option>
-                              {files
-                                .map((_, i) => i)
-                                .filter((i) => !clipIndexBlockedForNarrative(i))
-                                .map((i) => (
+                              {clipUiFiles
+                                .map((f, i) => ({ name: f.name, i }))
+                                .filter(({ i }) => !clipIndexBlockedForNarrative(i))
+                                .map(({ name, i }) => (
                                   <option key={i} value={i}>
-                                    Clip {i}
+                                    Clip {i} · {name}
                                   </option>
                                 ))}
                             </select>
