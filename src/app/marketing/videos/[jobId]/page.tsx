@@ -364,6 +364,21 @@ export default function JobDetailPage() {
                 </div>
               </div>
             </div>
+          ) : job.status === 'completed' ? (
+            <div className="bg-white rounded-2xl border border-amber-200 p-6 shadow-sm">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h2 className="text-base font-bold text-amber-800 mb-2">Video no disponible</h2>
+                  <p className="text-sm text-amber-700 bg-amber-50 px-4 py-3 rounded-xl">
+                    El video final ya no está disponible.
+                    {canRerenderFromEditor
+                      ? ' Puedes volver a generarlo desde sus clips con «Re-renderizar video», en el editor de abajo.'
+                      : ' Se puede volver a generar desde sus clips.'}
+                  </p>
+                </div>
+              </div>
+            </div>
           ) : null}
 
           {/* Análisis IA — nuevo formato con secuencia de segmentos */}
