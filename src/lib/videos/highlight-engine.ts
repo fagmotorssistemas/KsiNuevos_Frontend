@@ -2,7 +2,7 @@ import type { SequenceItem, SubtitleBlock, SubtitleHighlightFx } from './segment
 import { isDriveBadgeText } from './drive-badge'
 import { normalizeForMatch } from './subtitle-screen-text'
 import type { AiHighlightPhrase } from './claude-editor'
-import type { ReelLayout } from './reel-timeline'
+import { computeReelClipStartSec, type ReelLayout } from './reel-timeline'
 
 export type HighlightKind = 'spec' | 'feature' | 'emotional'
 
@@ -17,8 +17,6 @@ export interface VehicleHighlightContext {
 
 type CaptionHighlightFx = SubtitleHighlightFx
 
-const CLIP_TRANSITION_OVERLAP_SEC = 0.5
-const CLIP_BOUNDARY_INDICES = [0, 1, 4] as const
 const SHOWCASE_SEQUENCE_INDEX = 3
 const MAX_PUNCH_BLOCKS = 3
 const SFX_MIN_GAP_SEC = 2.5
@@ -86,24 +84,6 @@ export interface ApplyCaptionHighlightsOpts {
   layout?: ReelLayout
 }
 
-function countClipTransitionOverlapsBefore(clipIndex: number, sequenceLength: number): number {
-  let n = 0
-  for (const boundary of CLIP_BOUNDARY_INDICES) {
-    if (clipIndex > boundary && boundary + 1 < sequenceLength) n++
-  }
-  return n
-}
-
-function computeVideoTimelineStartSec(sequence: SequenceItem[], clipIndex: number): number {
-  let linear = 0
-  for (let i = 0; i < clipIndex; i++) {
-    linear += sequence[i]!.trim_duration
-  }
-  const overlap =
-    CLIP_TRANSITION_OVERLAP_SEC * countClipTransitionOverlapsBefore(clipIndex, sequence.length)
-  return Number(Math.max(0, linear - overlap).toFixed(3))
-}
-
 export function computeShowcaseStartSec(
   sequence: SequenceItem[],
   brandMentionTimeSec?: number,
@@ -116,7 +96,7 @@ export function computeShowcaseStartSec(
   if (sequence.length > SHOWCASE_SEQUENCE_INDEX) {
     return voLayout
       ? (voLayout.cutStartSec[SHOWCASE_SEQUENCE_INDEX] ?? 0)
-      : computeVideoTimelineStartSec(sequence, SHOWCASE_SEQUENCE_INDEX)
+      : computeReelClipStartSec(sequence, SHOWCASE_SEQUENCE_INDEX)
   }
 
   if (brandMentionTimeSec != null && brandMentionTimeSec > 0) {
