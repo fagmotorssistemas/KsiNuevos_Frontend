@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import type { FlowType, GeminiSegmentAnalysisResult, VideoJobStatus } from './types'
+import type { FlowType, ReelEditAnalysisResult, VideoJobStatus } from './types'
 import {
   getSignedUrlForPath,
   resolveFinalReelVideoUrl,
@@ -74,7 +74,7 @@ import {
   buildForcedManualOrderClipAnalysis,
   buildValidatedAnalysisFromGuionSequence,
   type AnalyzeSegmentsOptions,
-} from './gemini'
+} from './reel-editor'
 import {
   logGuionDialogueMatchMatrix,
   tryBuildSequenceFromGuionDialogues,
@@ -129,7 +129,7 @@ function vehicleIdFromPipelineMeta(selectedClips: unknown): string | null {
   return id || null
 }
 
-async function fetchJobGeminiContext(jobId: string): Promise<{
+async function fetchJobEditorContext(jobId: string): Promise<{
   scriptText: string | null
   canonicalVehicle?: CanonicalVehicleMeta
   vehicleId?: string | null
@@ -324,7 +324,7 @@ function tryAnalysisFromGuionDialogues(
   allSegments: Segment[],
   escenas: GuionEscena[],
   opts: GuionSequenceAttemptOpts
-): GeminiSegmentAnalysisResult | null {
+): ReelEditAnalysisResult | null {
   if (opts.manualClipOrder && opts.manualClipOrder.length > 0) {
     console.log(`[VideoV2Pipeline][${jobId}][GuionSeq] Omitido: orden manual de clips activo`)
     return null
@@ -826,23 +826,23 @@ export async function runSingleVideoPipelineFromStorage(
     await linkInventoryVehicleBeforeAnalysis(jobId, segments)
 
     const formattedMap = formatSegmentMapForPrompt(segments)
-    const ctx = await fetchJobGeminiContext(jobId)
+    const ctx = await fetchJobEditorContext(jobId)
     const scriptGuidanceText = ctx.scriptText ?? undefined
     const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
     const assemblyDump = formatAssemblyTranscriptDumpForPrompt(segments)
-    const geminiOpts: AnalyzeSegmentsOptions = {}
-    if (scriptGuidanceText) geminiOpts.scriptGuidanceText = scriptGuidanceText
-    if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
-    geminiOpts.assemblyTranscriptDump = assemblyDump
-    if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
-    geminiOpts.mileageKm = await fetchInventoryMileageKm(ctx.vehicleId)
+    const editorOpts: AnalyzeSegmentsOptions = {}
+    if (scriptGuidanceText) editorOpts.scriptGuidanceText = scriptGuidanceText
+    if (scriptDialogues.length > 0) editorOpts.scriptDialogueLines = scriptDialogues
+    editorOpts.assemblyTranscriptDump = assemblyDump
+    if (ctx.canonicalVehicle) editorOpts.canonicalVehicle = ctx.canonicalVehicle
+    editorOpts.mileageKm = await fetchInventoryMileageKm(ctx.vehicleId)
     const motionSingle = resolveMotionMode(jobId, ctx.renderEngine, false)
     const motionFormatSingle = motionSingle
       ? await resolveJobMotionFormat(jobId, ctx.motionFormat, ctx.vehicleId, ctx.canonicalVehicle)
       : null
-    if (motionFormatSingle) geminiOpts.motion = motionFormatSingle
+    if (motionFormatSingle) editorOpts.motion = motionFormatSingle
     const previousReelsSingle = await buildPreviousReelsBlock(getServiceClient(), jobId)
-    if (previousReelsSingle) geminiOpts.previousReelsBlock = previousReelsSingle
+    if (previousReelsSingle) editorOpts.previousReelsBlock = previousReelsSingle
 
     const escenasSingle = await loadGuionEscenasForPipelineJob(jobId, segments)
     let analysis =
@@ -861,7 +861,7 @@ export async function runSingleVideoPipelineFromStorage(
         jobId,
         frames,
         [],
-        Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
+        Object.keys(editorOpts).length > 0 ? editorOpts : undefined
       )
     } else {
       console.log(`[VideoV2Pipeline][${jobId}][A3] Secuencia por guión (sin llamada a Claude para orden)`)
@@ -1422,11 +1422,11 @@ export async function runMultipleClipsPipelineFromStorage(
       ...(voiceOverBaseClipIndex != null ? [voiceOverBaseClipIndex] : []),
       ...(voiceOverOverlayClipIndicesInput ?? []),
     ])
-    const segmentsForGeminiPrompt = allSegments.filter(
+    const segmentsForEditorPrompt = allSegments.filter(
       (s) => !excludeFromNarrative.has(s.clip_index) && s.source_kind !== 'visual_only'
     )
-    const formattedMap = formatSegmentMapForPrompt(segmentsForGeminiPrompt)
-    const ctx = await fetchJobGeminiContext(jobId)
+    const formattedMap = formatSegmentMapForPrompt(segmentsForEditorPrompt)
+    const ctx = await fetchJobEditorContext(jobId)
     const scriptGuidanceText = ctx.scriptText ?? undefined
     const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
     const assemblyDump = formatAssemblyTranscriptDumpForPrompt(allSegments)
@@ -1463,7 +1463,7 @@ export async function runMultipleClipsPipelineFromStorage(
       )
     }
 
-    const geminiOpts: AnalyzeSegmentsOptions = {}
+    const editorOpts: AnalyzeSegmentsOptions = {}
     const motionMulti = resolveMotionMode(
       jobId,
       ctx.renderEngine,
@@ -1472,24 +1472,24 @@ export async function runMultipleClipsPipelineFromStorage(
     const motionFormatMulti = motionMulti
       ? await resolveJobMotionFormat(jobId, ctx.motionFormat, ctx.vehicleId, ctx.canonicalVehicle)
       : null
-    if (motionFormatMulti) geminiOpts.motion = motionFormatMulti
+    if (motionFormatMulti) editorOpts.motion = motionFormatMulti
     if (voiceOverBaseClipIndex != null) {
-      geminiOpts.manualVoiceOverBaseClipIndex = voiceOverBaseClipIndex
+      editorOpts.manualVoiceOverBaseClipIndex = voiceOverBaseClipIndex
     }
     if (voiceOverAudioPath != null) {
-      geminiOpts.manualVoiceOverFromExternalAudio = true
-      geminiOpts.excludeClipIndicesFromSequence = voiceOverOverlayClipIndicesInput ?? []
+      editorOpts.manualVoiceOverFromExternalAudio = true
+      editorOpts.excludeClipIndicesFromSequence = voiceOverOverlayClipIndicesInput ?? []
     }
-    if (scriptGuidanceText) geminiOpts.scriptGuidanceText = scriptGuidanceText
-    if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
-    geminiOpts.assemblyTranscriptDump = assemblyDump
-    if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
-    geminiOpts.mileageKm = await fetchInventoryMileageKm(ctx.vehicleId)
+    if (scriptGuidanceText) editorOpts.scriptGuidanceText = scriptGuidanceText
+    if (scriptDialogues.length > 0) editorOpts.scriptDialogueLines = scriptDialogues
+    editorOpts.assemblyTranscriptDump = assemblyDump
+    if (ctx.canonicalVehicle) editorOpts.canonicalVehicle = ctx.canonicalVehicle
+    editorOpts.mileageKm = await fetchInventoryMileageKm(ctx.vehicleId)
     if (normClipOrder && normClipOrder.length > 0) {
-      geminiOpts.manualClipOrderIndices = normClipOrder
+      editorOpts.manualClipOrderIndices = normClipOrder
       console.log(`[VideoV2Pipeline][${jobId}][B3] Orden manual de clips activo: ${normClipOrder.join(' → ')}`)
     } else if (normIntro && normIntro.length > 0) {
-      geminiOpts.manualIntroClipIndices = normIntro
+      editorOpts.manualIntroClipIndices = normIntro
       console.log(`[VideoV2Pipeline][${jobId}][B3] Intro fija manual activa: clips ${normIntro.join(' → ')}`)
     }
 
@@ -1498,7 +1498,7 @@ export async function runMultipleClipsPipelineFromStorage(
 
     if (escenasMulti.length === 0) await linkInventoryVehicleBeforeAnalysis(jobId, allSegments)
     const previousReelsMulti = await buildPreviousReelsBlock(getServiceClient(), jobId)
-    if (previousReelsMulti) geminiOpts.previousReelsBlock = previousReelsMulti
+    if (previousReelsMulti) editorOpts.previousReelsBlock = previousReelsMulti
 
     const forceChecklist =
       ctx.forceAllManualOrderClips === true &&
@@ -1568,7 +1568,7 @@ export async function runMultipleClipsPipelineFromStorage(
           jobId,
           frames,
           kinds,
-          Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
+          Object.keys(editorOpts).length > 0 ? editorOpts : undefined
         )
       } else {
         console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada a Claude para orden)`)
@@ -1641,7 +1641,7 @@ export async function runMultipleClipsPipelineFromStorage(
         : null,
     })
 
-    let geminiAnalysisPatch: typeof analysis | undefined
+    let analysisPatch: typeof analysis | undefined
     if (voiceOverIntro != null) {
       const ins = Math.max(
         0,
@@ -1650,7 +1650,7 @@ export async function runMultipleClipsPipelineFromStorage(
       const afterS = analysis.sequence.slice(ins)
       const beforeS = analysis.sequence.slice(0, ins)
       const d0 = sumSequenceItemsDurationSec(beforeS)
-      geminiAnalysisPatch = {
+      analysisPatch = {
         ...analysis,
         total_duration: Number(
           (d0 + voiceOverIntro.voDurationSec + sumSequenceItemsDurationSec(afterS)).toFixed(3)
@@ -1661,7 +1661,7 @@ export async function runMultipleClipsPipelineFromStorage(
     await updateJob(jobId, {
       adjusted_srt: adjustedSrt,
       progress_percentage: 75,
-      ...(geminiAnalysisPatch ? { gemini_analysis: geminiAnalysisPatch } : {}),
+      ...(analysisPatch ? { gemini_analysis: analysisPatch } : {}),
     })
     console.log(`[VideoV2Pipeline][${jobId}][B4] ${subtitleBlocks.length} bloques de subtítulos generados`)
 
@@ -1844,7 +1844,7 @@ function parseSegmentMapJson(raw: unknown): Segment[] {
   return raw as Segment[]
 }
 
-function coerceGeminiAnalysisFromUnknown(raw: unknown, jobId: string): GeminiSegmentAnalysisResult {
+function coerceReelAnalysisFromUnknown(raw: unknown, jobId: string): ReelEditAnalysisResult {
   if (typeof raw !== 'object' || raw === null || !('sequence' in raw)) {
     throw new Error(`[${jobId}] gemini_analysis inválido: se esperaba un objeto con "sequence".`)
   }
@@ -1910,7 +1910,7 @@ function coerceGeminiAnalysisFromUnknown(raw: unknown, jobId: string): GeminiSeg
 }
 
 function assertSequenceMatchesStoredSegments(
-  analysis: GeminiSegmentAnalysisResult,
+  analysis: ReelEditAnalysisResult,
   segments: Segment[],
   jobId: string
 ): void {
@@ -1953,7 +1953,7 @@ export function parseSubtitleBlocksOverride(raw: unknown): SubtitleBlock[] | nul
 async function computeAutomaticSubtitlePayload(params: {
   jobId: string
   paths: string[]
-  analysis: GeminiSegmentAnalysisResult
+  analysis: ReelEditAnalysisResult
   allSegments: Segment[]
   kinds: VideoClipKind[]
   clipDurationsSecInput?: (number | null)[]
@@ -2246,7 +2246,7 @@ export type VideoJobSegmentTrimBound = {
 }
 
 export async function getVideoJobEditorState(jobId: string): Promise<{
-  gemini_analysis: GeminiSegmentAnalysisResult
+  gemini_analysis: ReelEditAnalysisResult
   subtitle_blocks_auto: SubtitleBlock[]
   subtitle_blocks_effective: SubtitleBlock[]
   subtitle_override_active: boolean
@@ -2267,7 +2267,7 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
   if (paths.length === 0) throw new Error('Job sin raw_video_paths')
 
   const storedSegments = parseSegmentMapJson(job.segment_map)
-  const analysis = coerceGeminiAnalysisFromUnknown(job.gemini_analysis, jobId)
+  const analysis = coerceReelAnalysisFromUnknown(job.gemini_analysis, jobId)
   assertSequenceMatchesStoredSegments(analysis, storedSegments, jobId)
   // La transcripción guardada queda tal cual; los subtítulos salen con las correcciones de Claude.
   const allSegments = applyTranscriptFixes(storedSegments, analysis.transcript_fixes)
@@ -2377,7 +2377,7 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
  */
 export async function rerunRenderForJob(
   jobId: string,
-  geminiAnalysisOverride?: unknown,
+  analysisOverride?: unknown,
   opts?: { musicTrackIdOverride?: string; musicTrimStartSecOverride?: number | null }
 ): Promise<{ renderId: string }> {
   const supabase = getServiceClient()
@@ -2408,8 +2408,8 @@ export async function rerunRenderForJob(
     : undefined
 
   const storedSegments = parseSegmentMapJson(job.segment_map)
-  const rawAnalysis = geminiAnalysisOverride ?? job.gemini_analysis
-  const analysis = coerceGeminiAnalysisFromUnknown(rawAnalysis, jobId)
+  const rawAnalysis = analysisOverride ?? job.gemini_analysis
+  const analysis = coerceReelAnalysisFromUnknown(rawAnalysis, jobId)
   assertSequenceMatchesStoredSegments(analysis, storedSegments, jobId)
   const allSegments = applyTranscriptFixes(storedSegments, analysis.transcript_fixes)
 
@@ -2506,7 +2506,7 @@ export async function rerunRenderForJob(
     )
   }
 
-  let geminiAnalysisPatch: GeminiSegmentAnalysisResult | undefined
+  let analysisPatch: ReelEditAnalysisResult | undefined
   if (voiceOverIntro != null) {
     const ins = Math.max(
       0,
@@ -2515,7 +2515,7 @@ export async function rerunRenderForJob(
     const afterS = analysis.sequence.slice(ins)
     const beforeS = analysis.sequence.slice(0, ins)
     const d0 = sumSequenceItemsDurationSec(beforeS)
-    geminiAnalysisPatch = {
+    analysisPatch = {
       ...analysis,
       total_duration: Number(
         (d0 + voiceOverIntro.voDurationSec + sumSequenceItemsDurationSec(afterS)).toFixed(3)
@@ -2523,7 +2523,7 @@ export async function rerunRenderForJob(
     }
   }
 
-  const analysisToStore = geminiAnalysisPatch ?? analysis
+  const analysisToStore = analysisPatch ?? analysis
   // Un Reel Motion 3D se vuelve a renderizar en Motion 3D (con el mismo plan de gráficos), si este servidor puede.
   const motionRerun = resolveMotionMode(jobId, renderEngineFromPipelineMeta(sc), voiceOverIntro != null)
 
@@ -2694,7 +2694,7 @@ export async function applyVideoJobEditorPatch(
       throw new Error('Job sin gemini_analysis o segment_map')
     }
     const allSegments = parseSegmentMapJson(job.segment_map)
-    const analysis = coerceGeminiAnalysisFromUnknown(job.gemini_analysis, jobId)
+    const analysis = coerceReelAnalysisFromUnknown(job.gemini_analysis, jobId)
     const clamped = clampSequenceToSegmentBounds(patch.sequence, allSegments)
     assertSequenceMatchesStoredSegments(
       { ...analysis, sequence: clamped },

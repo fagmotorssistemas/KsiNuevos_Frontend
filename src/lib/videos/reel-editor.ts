@@ -3,7 +3,7 @@
  * y aquí se validan con las reglas editoriales de la casa.
  *
  * Con cuadros (segment-frames.ts) Claude ve cada toma; sin ffmpeg trabaja solo con texto.
- * El nombre del archivo y de `gemini_analysis` se conservan por los datos ya guardados.
+ * La columna `gemini_analysis` conserva su nombre por los datos ya guardados (antes este archivo era gemini.ts).
  */
 
 import type { Segment, SequenceItem, SequenceVisualOverlay } from './segmenter'
@@ -18,7 +18,7 @@ import { motionPlanPromptBlock, type MotionFormat, type MotionPlan } from '@/lib
 
 // ─── Tipos de respuesta ──────────────────────────────────────────────────────
 
-export interface GeminiSegmentAnalysis {
+export interface ReelEditAnalysis {
   sequence: SequenceItem[]
   total_duration: number
   overall_strategy: string
@@ -626,7 +626,7 @@ function dedupeConsecutiveNearDuplicates(
   return out
 }
 
-interface ValidateGeminiSequenceOptions {
+interface ValidateReelSequenceOptions {
   /** Descarta cualquier ítem cuyo segmento pertenezca a estos clip_index (p. ej. clip de VO manual). */
   excludeClipIndicesFromSequence?: number[]
   /** Si true, no se normaliza visual_overlay (modo VO manual: sin B-roll decidido por Claude). */
@@ -645,7 +645,7 @@ interface ValidateGeminiSequenceOptions {
   guionDeterministicOrder?: boolean
 }
 
-function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLength: number): number {
+function coerceVoiceOverInsertAfterCount(raw: ReelEditAnalysis, sequenceLength: number): number {
   const r = raw as unknown as Record<string, unknown>
   const v = r.voice_over_insert_after_count
   let n = 0
@@ -828,12 +828,12 @@ function reorderSequenceByManualClipOrder(
 }
 
 function validateSequence(
-  raw: GeminiSegmentAnalysis,
+  raw: ReelEditAnalysis,
   allSegments: Segment[],
   jobId: string,
   clipKinds: VideoClipKind[] = [],
-  opts?: ValidateGeminiSequenceOptions
-): GeminiSegmentAnalysis {
+  opts?: ValidateReelSequenceOptions
+): ReelEditAnalysis {
   const segmentLookup = new Map<string, Segment>()
   for (const s of allSegments) {
     segmentLookup.set(s.segment_id, s)
@@ -1287,7 +1287,7 @@ export async function analyzeSegments(
   frames: SegmentFrame[] = [],
   clipKinds: VideoClipKind[] = [],
   options?: AnalyzeSegmentsOptions
-): Promise<GeminiSegmentAnalysis> {
+): Promise<ReelEditAnalysis> {
   const mode = frames.length > 0 ? `visual (${frames.length} cuadros)+texto` : 'solo texto'
   const clipCount = inferClipCountFromSegments(allSegments)
   const kindsForPrompt = clipKindsResolved(clipKinds, clipCount)
@@ -1300,8 +1300,8 @@ export async function analyzeSegments(
     manualVo ?? null,
     externalVo
   )
-  const validateOpts: ValidateGeminiSequenceOptions | undefined = (() => {
-    const o: ValidateGeminiSequenceOptions = {}
+  const validateOpts: ValidateReelSequenceOptions | undefined = (() => {
+    const o: ValidateReelSequenceOptions = {}
     if (manualVo != null) {
       o.excludeClipIndicesFromSequence = [manualVo]
       o.disableVisualOverlayNormalization = true
@@ -1396,8 +1396,8 @@ export function buildForcedManualOrderClipAnalysis(
   excluded: number[],
   jobId: string,
   clipKinds: VideoClipKind[] = [],
-  extraOpts?: Omit<ValidateGeminiSequenceOptions, 'manualClipOrderIndices' | 'forceAllManualOrderClips'>
-): GeminiSegmentAnalysis {
+  extraOpts?: Omit<ValidateReelSequenceOptions, 'manualClipOrderIndices' | 'forceAllManualOrderClips'>
+): ReelEditAnalysis {
   const excludedSet = new Set(excluded)
   const sequence: SequenceItem[] = []
 
@@ -1469,10 +1469,10 @@ export function buildValidatedAnalysisFromGuionSequence(
   allSegments: Segment[],
   jobId: string,
   clipKinds: VideoClipKind[] = [],
-  opts?: ValidateGeminiSequenceOptions
-): GeminiSegmentAnalysis {
+  opts?: ValidateReelSequenceOptions
+): ReelEditAnalysis {
   const total = Number(sequence.reduce((sum, it) => sum + it.trim_duration, 0).toFixed(3))
-  const raw: GeminiSegmentAnalysis = {
+  const raw: ReelEditAnalysis = {
     sequence,
     total_duration: total,
     overall_strategy: 'Montaje por orden de diálogos del guión (tabla guion_escenas)',

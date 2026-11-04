@@ -86,7 +86,7 @@ export function parseGuionEscenas(raw: unknown): GuionEscena[] {
   return rows.sort((a, b) => a.esc - b.esc)
 }
 
-/** Líneas de diálogo en orden de escena (para alinear Assembly / secuencia Gemini). */
+/** Líneas de diálogo en orden de escena (para alinear Assembly con la secuencia de Claude). */
 export function dialogueLinesFromGuionEscenas(escenas: GuionEscena[]): string[] {
   return escenas
     .map((e) => e.dialogo?.trim())

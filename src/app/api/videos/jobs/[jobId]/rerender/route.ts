@@ -24,7 +24,7 @@ export async function POST(
       return NextResponse.json({ error: 'jobId requerido' }, { status: 400 })
     }
 
-    let geminiOverride: unknown
+    let analysisOverride: unknown
     const raw = await request.text()
     if (raw.trim()) {
       let body: {
@@ -38,7 +38,7 @@ export async function POST(
       } catch {
         return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
       }
-      geminiOverride = body.gemini_analysis
+      analysisOverride = body.gemini_analysis
       const musicTrackId =
         typeof body.music_track_id === 'string' && body.music_track_id.trim().length > 0
           ? body.music_track_id.trim()
@@ -54,14 +54,14 @@ export async function POST(
           subtitle_blocks_override: body.subtitle_blocks_override,
         })
       }
-      const { renderId } = await rerunRenderForJob(jobId, geminiOverride, {
+      const { renderId } = await rerunRenderForJob(jobId, analysisOverride, {
         musicTrackIdOverride: musicTrackId,
         musicTrimStartSecOverride,
       })
       return NextResponse.json({ ok: true, renderId })
     }
 
-    const { renderId } = await rerunRenderForJob(jobId, geminiOverride)
+    const { renderId } = await rerunRenderForJob(jobId, analysisOverride)
     return NextResponse.json({ ok: true, renderId })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al re-renderizar'

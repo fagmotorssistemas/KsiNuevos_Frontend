@@ -31,7 +31,7 @@ export type PublishingPlatform = 'instagram' | 'facebook'
 export type FlowType = 'single' | 'multiple'
 
 // Formato anterior — se mantiene por compatibilidad con jobs viejos
-export interface GeminiSingleAnalysis {
+export interface LegacySingleAnalysis {
   trim_start: number
   trim_end: number
   trim_duration: number
@@ -39,7 +39,7 @@ export interface GeminiSingleAnalysis {
   reason: string
 }
 
-export interface GeminiClip {
+export interface LegacyAnalysisClip {
   clip_index: number
   clip_url: string
   trim_start: number
@@ -47,14 +47,14 @@ export interface GeminiClip {
   reason: string
 }
 
-export interface GeminiMultipleAnalysis {
-  selected_clips: GeminiClip[]
+export interface LegacyMultipleAnalysis {
+  selected_clips: LegacyAnalysisClip[]
   total_duration: number
   overall_reason: string
 }
 
 // Nuevo formato V2 de análisis basado en segmentos
-export interface GeminiSegmentAnalysisResult {
+export interface ReelEditAnalysisResult {
   sequence: SequenceItem[]
   total_duration: number
   overall_strategy: string
@@ -72,10 +72,10 @@ export interface GeminiSegmentAnalysisResult {
   editor_usage?: ReelEditorUsage
 }
 
-export type GeminiAnalysis =
-  | GeminiSingleAnalysis
-  | GeminiMultipleAnalysis
-  | GeminiSegmentAnalysisResult
+export type StoredReelAnalysis =
+  | LegacySingleAnalysis
+  | LegacyMultipleAnalysis
+  | ReelEditAnalysisResult
 
 export interface VideoJobInventoryJoin {
   id: string
@@ -104,7 +104,8 @@ export interface VideoJob {
   error_message: string | null
   assemblyai_transcript_id: string | null
   srt_content: string | null
-  gemini_analysis: GeminiAnalysis | null
+  /** Montaje de Claude. La columna conserva el nombre de cuando lo hacía Gemini (producción la usa). */
+  gemini_analysis: StoredReelAnalysis | null
   creatomate_render_id: string | null
   final_video_url: string | null
   final_video_duration: number | null
@@ -115,7 +116,7 @@ export interface VideoJob {
   script_pdf_path?: string | null
   /** Texto extraído del PDF para Claude (guía no estricta). */
   script_text?: string | null
-  selected_clips: GeminiClip[] | null
+  selected_clips: LegacyAnalysisClip[] | null
   /** Mapa de segmentos (AssemblyAI + post-proceso); útil para re-render y depuración. */
   segment_map: unknown | null
   /** Subtítulos corregidos a mano; si existe, el re-render prioriza esto sobre AssemblyAI. */

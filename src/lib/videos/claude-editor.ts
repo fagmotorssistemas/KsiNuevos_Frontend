@@ -60,7 +60,7 @@ export interface ReelEditorResult {
   overall_strategy: string
   voice_over_insert_after_count?: number
   caption_highlights: AiHighlightPhrase[]
-  /** Errores de la transcripción en los cortes elegidos (se validan contra el mapa en gemini.ts). */
+  /** Errores de la transcripción en los cortes elegidos (se validan contra el mapa en reel-editor.ts). */
   transcript_fixes: TranscriptFix[]
   visual_plan: VisualPlan | null
   /** Solo en Reels Motion 3D (en lugar de visual_plan). */

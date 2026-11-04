@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Clapperboard, Loader2, Pencil, RotateCcw, Save, X } from 'lucide-react'
 import type { SequenceItem, SubtitleBlock } from '@/lib/videos/segmenter'
-import type { GeminiSegmentAnalysisResult } from '@/lib/videos/types'
+import type { ReelEditAnalysisResult } from '@/lib/videos/types'
 import { MusicSelector } from './MusicSelector'
 import { MusicTrimStartField } from './MusicTrimStartField'
 
 type EditorStateResponse = {
-  gemini_analysis: GeminiSegmentAnalysisResult
+  gemini_analysis: ReelEditAnalysisResult
   subtitle_blocks_auto: SubtitleBlock[]
   subtitle_blocks_effective: SubtitleBlock[]
   subtitle_override_active: boolean
@@ -197,7 +197,7 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
     setSaving(true)
     setError(null)
     try {
-      const parsed = JSON.parse(rerenderJson) as GeminiSegmentAnalysisResult
+      const parsed = JSON.parse(rerenderJson) as ReelEditAnalysisResult
       const res = await fetch(`/api/videos/jobs/${jobId}/rerender`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

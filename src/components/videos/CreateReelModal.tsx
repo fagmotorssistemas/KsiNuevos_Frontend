@@ -24,7 +24,7 @@ import { MusicSelector } from './MusicSelector'
 import { MusicTrimStartField } from './MusicTrimStartField'
 import { PipelineStatus } from './PipelineStatus'
 import { VideoPlayer } from './VideoPlayer'
-import type { VideoJob, GeminiSegmentAnalysisResult } from '@/lib/videos/types'
+import type { VideoJob, ReelEditAnalysisResult } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
 import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 import {
@@ -965,7 +965,7 @@ export function CreateReelModal({
 
   if (!isOpen) return null
 
-  const segmentAnalysis = completedJob?.gemini_analysis as GeminiSegmentAnalysisResult | null
+  const segmentAnalysis = completedJob?.gemini_analysis as ReelEditAnalysisResult | null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

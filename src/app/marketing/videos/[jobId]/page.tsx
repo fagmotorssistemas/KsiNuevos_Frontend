@@ -145,10 +145,10 @@ export default function JobDetailPage() {
   const socialStage = job ? resolveSocialPublishStage(job) : null
   const socialStageConfig = socialStage ? SOCIAL_STAGE_CONFIG[socialStage] : null
 
-  // Nuevo formato: secuencia de segmentos
-  const gemini = job?.gemini_analysis
+  // Nuevo formato: secuencia de segmentos (la columna conserva el nombre gemini_analysis)
+  const storedAnalysis = job?.gemini_analysis
   const segmentAnalysis =
-    gemini != null && 'sequence' in gemini ? gemini : null
+    storedAnalysis != null && 'sequence' in storedAnalysis ? storedAnalysis : null
 
   const canRerenderFromEditor = Boolean(
     job &&
