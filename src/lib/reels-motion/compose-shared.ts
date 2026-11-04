@@ -41,8 +41,11 @@ export function cueTime(cut: CutTiming, segment: Segment | undefined, cue: strin
 
 export type Timed = { start: number; end: number }
 
-/** Lo que ya lleva este tiempo en pantalla puede salir antes para dejar entrar lo nuevo. */
-export const MIN_ON_SCREEN = 0.7
+/**
+ * Lo que ya lleva este tiempo en pantalla puede salir antes para dejar entrar lo nuevo. Si no, la pieza
+ * nueva busca otro lugar o no entra: así nada se corta antes de poder leerse (manual del editor).
+ */
+export const MIN_ON_SCREEN = 1.5
 
 export type CaptionGroup = { start: number; end: number; words: { text: string; start: number; end: number; key: boolean }[] }
 

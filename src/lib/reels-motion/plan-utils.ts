@@ -42,6 +42,14 @@ export function num(value: unknown, fallback: number, min: number, max: number):
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
 }
 
+/** Una pieza con texto necesita al menos esto en pantalla para leerse (las transiciones son más cortas). */
+export const MIN_READ_SEC = 1.5
+
+/** Duración de un gráfico: las piezas con texto nunca quedan por debajo de MIN_READ_SEC. */
+export function beatDuration(kind: string, value: unknown, fallback: number): number {
+  return num(value, fallback, kind === 'transicion' ? 0.6 : MIN_READ_SEC, 4)
+}
+
 export function cueWord(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }

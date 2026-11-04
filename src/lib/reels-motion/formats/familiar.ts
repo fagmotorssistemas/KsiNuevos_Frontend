@@ -11,6 +11,7 @@ import {
   SIZES,
   SLOTS,
   cleanText,
+  beatDuration,
   cueWord,
   faceBand,
   nullable,
@@ -231,7 +232,7 @@ export const FAMILIAR_PROMPT_BLOCK = `MOTION 3D — FORMATO FAMILIAR ("motion_pl
   · El sistema agrega solo el cierre (2,4 s); "closing_line" es la frase del cierre (ej. Agenda tu prueba de manejo con toda la familia).
 - "style": accent (coral, cielo, menta o sol), finish (perla o caramelo) y un "name" corto.
 - "hook": "word" = modelo o palabra 3D del segundo 0 (máx. 14 letras); "chips" = 0 a 2 textos cortos (ej. CHEVROLET, 2026); badge_label/badge_value = el dato fuerte (ej. "SOLO" y "14.000 km") o null; "entrance"; face_top/face_bottom del primer corte.
-- "beats": los gráficos, en orden de tiempo. Cada uno va sobre un corte de tu "sequence" o una toma sin habla del orden de clips (segment_id) y entra cuando el asesor dice "cue_word" (palabra literal de ese corte); si no aplica, null y usa "offset" (segundos desde el inicio del corte). "duration" 1–3 s. "slot" = zona preferida (arriba, centro, abajo).
+- "beats": los gráficos, en orden de tiempo. Cada uno va sobre un corte de tu "sequence" o una toma sin habla del orden de clips (segment_id) y entra cuando el asesor dice "cue_word" (palabra literal de ese corte); si no aplica, null y usa "offset" (segundos desde el inicio del corte). "duration" 1,8–3 s (las transiciones, cortas); menos de 1,5 s no se alcanza a leer y el sistema lo alarga. "slot" = zona preferida (arriba, centro, abajo).
   · titulo_3d: "text" corto (1–3 palabras o una cifra), "size", "entrance".
   · dato: "label" chico (ej. SOLO, ÚNICO) + "text" = el valor (ej. 14.000 km).
   · contador: "text" = cifra (ej. 14.000), "sub" = unidad (ej. KM), "label" = qué es (ej. KILOMETRAJE), "note" = línea de abajo (ej. RECORRIDOS · COMO NUEVA) o "".
@@ -244,7 +245,7 @@ export const FAMILIAR_PROMPT_BLOCK = `MOTION 3D — FORMATO FAMILIAR ("motion_pl
   · transicion: elige el tipo de transición para entrar a ese corte: zoom (golpe de zoom), barrido (la toma entra deslizándose), circulo (se abre en círculo), destello (flash), luz (barrido de luz cálida), brillo (destello suave) o foto (flash con sonido de cámara, ideal para tomas del exterior). Los cortes que no elijas igual llevan una.
   · "emoji": en cualquier gráfico puedes poner un emoji que salta a su lado (ej. 🔥 en un dato fuerte, 📱 en la pantalla, 💪 en la tracción, 🙌 en los asientos, 💬 en el WhatsApp) o null; úsalo en la mitad de los gráficos, no en todos.
   · Campos que no aplican: null, [] o "".
-- Ritmo: un gráfico nuevo cada 1,5–2 s, que nunca haya más de 3 s sin algo nuevo; los subtítulos van abajo en una píldora blanca y nada los tapa. Solo datos que de verdad se dicen o se ven; nada inventado.
+- Ritmo: algo nuevo cada 2–3 s, que nunca haya más de 3 s sin algo nuevo, pero cada pieza se queda hasta que se lee: una pieza nueva no reemplaza a otra que lleva menos de 1,5 s en ese lugar y nunca hay más de 2 piezas grandes a la vez; los subtítulos van abajo en una píldora blanca y nada los tapa. Solo datos que de verdad se dicen o se ven; nada inventado.
 ${FACE_PROMPT_RULE}
 - Varía acento, acabado, entradas y el orden de las piezas respecto a los reels anteriores de este auto.
 `
@@ -284,7 +285,7 @@ function normalizeBeat(raw: unknown): FamiliarBeat | null {
     segment_id: segmentId,
     cue_word: cueWord(b.cue_word),
     offset: num(b.offset, 0, 0, 30),
-    duration: num(b.duration, 2, 0.8, 4),
+    duration: beatDuration(kind, b.duration, 2),
     slot: pickOrNull(SLOTS, b.slot),
     text: '',
     sub: '',

@@ -12,6 +12,7 @@ import {
   SIZES,
   SLOTS,
   cleanText,
+  beatDuration,
   cueWord,
   faceBand,
   nullable,
@@ -185,7 +186,7 @@ export const PREMIUM_PROMPT_BLOCK = `MOTION 3D — FORMATO PREMIUM ("motion_plan
   · El sistema agrega solo el cierre (2,4 s con COLECCIÓN Premium · K-SI NUEVOS); "closing_line" es la frase del cierre (ej. Agenda una visita privada).
 - "style": accent (oro, champan o plata), finish del modelo (espejo u oro_pulido) y un "name" corto.
 - "hook": "kicker" = marca (ej. MERCEDES-BENZ) o null; "word" = modelo en 3D (máx. 12 letras, ej. C300); "tagline" = frase corta o null; "entrance" (fondo = llega desde lejos, es la más elegante); face_top/face_bottom del primer corte.
-- "beats": los gráficos, en orden de tiempo. Cada uno va sobre un corte de tu "sequence" o una toma sin habla del orden de clips (segment_id) y entra cuando el asesor dice "cue_word" (palabra literal de ese corte); si no aplica, null y usa "offset" (segundos desde el inicio del corte). "duration" 1,5–3 s. "slot" = zona preferida (arriba, centro, abajo).
+- "beats": los gráficos, en orden de tiempo. Cada uno va sobre un corte de tu "sequence" o una toma sin habla del orden de clips (segment_id) y entra cuando el asesor dice "cue_word" (palabra literal de ese corte); si no aplica, null y usa "offset" (segundos desde el inicio del corte). "duration" 2–3,5 s (las transiciones, cortas); menos de 1,5 s no se alcanza a leer y el sistema lo alarga. "slot" = zona preferida (arriba, centro, abajo).
   · titulo_3d: "text" = cifra o palabra corta, "label" arriba y "sub" abajo (o ""), "size", "finish" (o null = el del estilo).
   · ficha: "label" (ej. SEDÁN · AMG LINE), "text" = modelo (ej. C 300), "sub" = año.
   · senal: "label" (ej. LOS DETALLES), "text" (ej. Salidas tipo turbina), point_x/point_y = dónde está en la toma (% del cuadro).
@@ -196,7 +197,7 @@ export const PREMIUM_PROMPT_BLOCK = `MOTION 3D — FORMATO PREMIUM ("motion_plan
   · agenda: "label" y "text".
   · transicion: elige el tipo de transición para entrar a ese corte: barrido (haz de luz), negro (fundido a negro más largo), pelicula (destello cálido de película), desenfoque (la toma entra desenfocada y se aclara) o zoom_suave. Los cortes que no elijas igual llevan una.
   · Campos que no aplican: null o "".
-- Ritmo: elegante pero sin pausas muertas, un gráfico cada 2 s (nunca más de 3 s sin algo nuevo) y uno a la vez (salvo dos señales seguidas). Los subtítulos van abajo en serif. Solo datos que de verdad se dicen o se ven; nada inventado.
+- Ritmo: elegante pero sin pausas muertas, un gráfico cada 2–3 s (nunca más de 3 s sin algo nuevo), que se quede al menos 2 s, y uno a la vez (salvo dos señales seguidas). Los subtítulos van abajo en serif. Solo datos que de verdad se dicen o se ven; nada inventado.
 ${FACE_PROMPT_RULE}
 - Varía acento, acabado, frases y el orden de las piezas respecto a los reels anteriores de este auto.
 `
@@ -212,7 +213,7 @@ function normalizeBeat(raw: unknown): PremiumBeat | null {
     segment_id: segmentId,
     cue_word: cueWord(b.cue_word),
     offset: num(b.offset, 0, 0, 30),
-    duration: num(b.duration, 2.2, 1, 4),
+    duration: beatDuration(kind, b.duration, 2.2),
     slot: pickOrNull(SLOTS, b.slot),
     text: '',
     sub: '',

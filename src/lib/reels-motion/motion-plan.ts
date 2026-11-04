@@ -18,6 +18,7 @@ import {
   SIZES,
   SLOTS,
   cleanText,
+  beatDuration,
   cueWord,
   faceBand,
   nullable,
@@ -226,7 +227,7 @@ const CAMIONETA_PROMPT_BLOCK = `MOTION 3D ("motion_plan") — este Reel lleva gr
 - Estilo de la referencia: títulos en 3D de metal extruido (óxido con cantos de color, cromo, carbón, oro o rojo), subtítulos condensados en mayúsculas con la palabra activa en color, placas oscuras con franja de peligro, etiquetas "// 01 K-SI SCAN" que señalan partes del auto, barro y piedras que saltan, y un cierre con la placa K-SI NUEVOS.
 - Formato camioneta (guía, no plantilla rígida; si el auto no es camioneta, adáptalo y omite lo que no aplica, como el balde):
   · 0–5 s gancho: textura (barro, polvo o piedras) + una palabra 3D fuerte desde el segundo 0, mientras el asesor hace la pregunta.
-  · 5–8 s presentación: marca, modelo, versión y año como títulos 3D que caen por partes.
+  · 5–8 s presentación: marca, modelo, versión y año como títulos 3D que se suman por partes: el modelo (ej. RANGER) entra arriba y se queda 2,5–3,5 s, y la versión (XL) y el año (2024) se le suman en otros slots, sin reemplazarlo.
   · 8–14 s capó: cilindrada y combustible como cifra 3D gigante + palabra 3D + una placa con el beneficio.
   · 14–22 s interior: 3 o 4 K-SI SCAN numerados sobre lo que se ve (volante, tablero, pantalla, palanca); cifra 3D si dice velocidades.
   · 22–27 s cabina y balde: ocupantes (cifra 3D + íconos) y placas escalonadas (EQUIPOS, HERRAMIENTAS, CARGA); una transición de barro entre bloques.
@@ -235,7 +236,7 @@ const CAMIONETA_PROMPT_BLOCK = `MOTION 3D ("motion_plan") — este Reel lleva gr
   · El sistema agrega solo el cierre (2,4 s con K-SI NUEVOS · CUENCA · ECUADOR); "closing_cta" es la línea de abajo (ej. COMENTA "RANGER + MUNDIAL").
 - "style": material, accent (color de acento), title_font, caption_font, cut_motion (golpe = cada corte entra con un golpe de zoom, empuje = acercamiento lento, mixto) y un "name" corto.
 - "hook": "word" = palabra 3D del segundo 0 (1 palabra o 2 cortas, ej. OFF-ROAD, IMPONENTE, BESTIA); "label" = texto chico encima (ej. MODO) o null; "texture"; "entrance"; origin_x/origin_y = de dónde salen la tierra y las piedras en el primer cuadro (% del ancho y alto, ej. la llanta), o null; face_top/face_bottom = la cabeza de la persona en el primer corte.
-- "beats": los gráficos, en orden de tiempo. Cada uno va sobre un corte de tu "sequence" o una toma sin habla del orden de clips (segment_id) y entra cuando el asesor dice "cue_word" (una palabra literal de ese corte, ej. "diésel"); si no aplica, null y usa "offset" (segundos desde el inicio del corte). "duration" 0,8–3 s.
+- "beats": los gráficos, en orden de tiempo. Cada uno va sobre un corte de tu "sequence" o una toma sin habla del orden de clips (segment_id) y entra cuando el asesor dice "cue_word" (una palabra literal de ese corte, ej. "diésel"); si no aplica, null y usa "offset" (segundos desde el inicio del corte). "duration": títulos, placas, scans y ocupantes 1,8–3,5 s (las cifras gigantes 2–3 s), las transiciones 0,8 s. Menos de 1,5 s no se alcanza a leer: el sistema lo alarga.
   · titulo_3d: "text" corto (1 palabra, o cifra como 2.0 / 2024 / 5), "size" (gigante para cifras, grande o mediano), "slot" (arriba, centro, abajo), "entrance" (caer = cae con rebote, fondo = llega desde lejos, letras = letra por letra, golpe = impacto con temblor), "debris" true si estalla tierra al entrar.
   · placa: "text" de 1 a 3 palabras (ej. TRABAJO EXIGENTE, CARGA), "slot".
   · scan: "text" = lo que señala (ej. MANDOS AL VOLANTE), point_x/point_y = dónde está en la toma (% del cuadro, míralo en el cuadro del corte), "screen" true si es una pantalla.
@@ -243,7 +244,7 @@ const CAMIONETA_PROMPT_BLOCK = `MOTION 3D ("motion_plan") — este Reel lleva gr
   · comentario: "text" = lo que el cliente debe comentar (ej. RANGER + MUNDIAL).
   · transicion: "transition" (barro = salpicón que tapa la toma, destello, golpe = sacudida) al inicio del corte; úsala 1 a 3 veces, en cambios de bloque.
   · Campos que no aplican: null, false o "".
-- Ritmo: un gráfico nuevo cada 1–3 s, nunca dos en el mismo slot a la vez, y nada tapa los subtítulos (van abajo, fijos). Solo datos que de verdad se dicen o se ven.
+- Ritmo: algo nuevo cada 2–3 s, pero cada pieza se queda hasta que se lee. Una pieza nueva no reemplaza a otra que lleva menos de 1,5 s en ese slot (el sistema la mueve a otro slot o no la pone), nunca hay más de 2 títulos 3D grandes a la vez y nada tapa los subtítulos (van abajo, fijos). Solo datos que de verdad se dicen o se ven.
 ${FACE_PROMPT_RULE}
 - Varía material, acento, entradas, transiciones, palabra del gancho y orden de las piezas respecto a los reels anteriores de este auto.
 `
@@ -268,7 +269,7 @@ function normalizeBeat(raw: unknown): MotionBeat | null {
     segment_id: segmentId,
     cue_word: cueWord(b.cue_word),
     offset: num(b.offset, 0, 0, 30),
-    duration: num(b.duration, 1.6, 0.6, 4),
+    duration: beatDuration(kind, b.duration, 1.6),
     text,
     size: pickOrNull(SIZES, b.size),
     slot: pickOrNull(SLOTS, b.slot),
