@@ -212,6 +212,11 @@ export interface SequenceItem {
   reason: string
   /** Si existe: se escucha el segmento hablado (clip_index) y se ve este recorte del clip B-roll (sin audio). */
   visual_overlay?: SequenceVisualOverlay
+  /**
+   * Lo decide Claude: true = pasa al siguiente corte con transición animada (solapa 0,5 s), false = corte
+   * seco. Si ningún corte lo trae (Reels viejos, Motion 3D), van las transiciones de siempre.
+   */
+  transition_after?: boolean
 }
 
 /** Suma de trim_duration de una secuencia (segundos). */

@@ -41,6 +41,11 @@ export interface VisualPlan {
   /** Datos cortos que aparecen cuando el asesor los menciona (0–4). */
   spec_cards: SpecCard[]
   card_animation: HookAnimation
+  /**
+   * Corte (segment_id) que entra con destello: el momento de revelación. null = sin destello.
+   * undefined = plan anterior a esta decisión (destello en el 4.º corte, como siempre).
+   */
+  flash_segment_id?: string | null
 }
 
 const MAX_HOOK_CHARS = 42
@@ -81,6 +86,10 @@ export function normalizeVisualPlan(raw: unknown): VisualPlan | null {
     color_filter: pick(COLOR_FILTERS, o.color_filter, 'ninguno'),
     spec_cards: cards,
     card_animation: pick(HOOK_ANIMATIONS, o.card_animation, 'deslizar_izquierda'),
+    // Solo los planos con esta decisión la traen; sin la clave, el destello va donde siempre.
+    ...('flash_segment_id' in o
+      ? { flash_segment_id: typeof o.flash_segment_id === 'string' && o.flash_segment_id.trim() ? o.flash_segment_id.trim() : null }
+      : {}),
   }
 }
 

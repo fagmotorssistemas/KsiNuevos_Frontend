@@ -6,7 +6,13 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { SequenceItem, SubtitleBlock } from './segmenter'
 import type { BrandConfig, VoiceOverIntroRenderInput } from './reel-render-inputs'
-import { buildReelLayout, type ReelLayout } from './reel-timeline'
+import {
+  buildReelLayout,
+  countClipTransitionOverlapsBefore,
+  hasDecidedTransitions,
+  transitionBoundaries,
+  type ReelLayout,
+} from './reel-timeline'
 import { planLinearBrollTiling, type VoBrollTile } from './vo-broll-semantics'
 import {
   CUT_TRANSITIONS,
@@ -76,7 +82,7 @@ const DEFAULT_CLIP_TRANSITION_WHOOSH_URL =
 const MOTOR_MENTION_SFX_VOLUME = 0.4
 const MOTOR_MENTION_SFX_LENGTH_SEC = 0.45
 const MOTOR_MENTION_SFX_MIN_GAP_SEC = 0.25
-/** 2º y 4º clip (índices 1 y 3): whoosh al entrar */
+/** Transiciones de siempre: whoosh al entrar el 2.º y el 4.º clip (índices 1 y 3). */
 const CLIP_WHOOSH_AT_CLIP_INDICES = [1, 3] as const
 const CLIP_TRANSITION_WHOOSH_VOLUME = 0.4
 const CLIP_TRANSITION_WHOOSH_LENGTH_SEC = 0.55
@@ -119,21 +125,24 @@ const CLOSING_LOGO_ENTRANCE_SEC = 0.45
 
 /** Solapamiento por transición (*Fast ≈ 0.5 s) para evitar flash negro */
 const CLIP_TRANSITION_OVERLAP_SEC = 0.5
-/** boundary index → transition.out del clip que sale (el entrante no lleva in) */
-const CLIP_BOUNDARY_TRANSITIONS: Record<number, string> = {
-  0: 'slideUp', // clip 1→2: lento, un poco más notorio que slideUpFast
-  1: 'wipeRightFast',
-  4: 'fadeFast', // clip 5→6: suelta la capa superior mientras el 6 entra con wipeLeft abajo
-}
-/** 6º clip (índice 5): wipeLeft sobre underlay del clip 5 (evita negro del timeline) */
-const CLIP_6_AT_INDEX = 5
+/**
+ * transition.out del clip que sale en la 1.ª, 2.ª y 3.ª transición del Reel (el estilo de siempre:
+ * eran los cortes 1→2, 2→3 y 5→6). Desde la 4.ª se repiten en ciclo.
+ */
+const LEGACY_TRANSITION_OUTS = [
+  'slideUp', // 1.ª: lento, un poco más notorio que slideUpFast
+  'wipeRightFast',
+  'fadeFast', // 3.ª: suelta la capa superior mientras el clip siguiente entra con wipeLeft abajo
+] as const
+/** La 3.ª transición entra con wipe sobre un underlay del clip que sale (evita negro del timeline). */
+const WIPE_IN_TRANSITION_ORDINAL = 2
 const CLIP_6_ENTER_TRANSITION_IN = 'wipeLeft'
 const CLIP_6_WIPE_UNDERLAY_SEC = 1.0
 /** Intro clip 1: zoomOut (empieza cerca, se aleja) */
 const FIRST_CLIP_INTRO_EFFECT = 'zoomOutFast' as const
 const FIRST_CLIP_INTRO_PULL_SEC = 0.28
 
-/** Destello amarillo-naranja al entrar el 4º clip (índice 3) */
+/** Sin decisión de Claude (Reels viejos): destello al entrar el 4.º clip (índice 3). */
 const CLIP_FLASH_AT_CLIP_INDEX = 3
 const CLIP_FLASH_LENGTH_SEC = 0.55
 
@@ -161,8 +170,9 @@ function clipFlashSvgMarkup([center, mid, edge]: [string, string, string]): stri
 
 /** Cómo se ven los cortes: el estilo de siempre o el que eligió Claude en el plan visual. */
 interface CutLook {
-  /** Mismas claves que CLIP_BOUNDARY_TRANSITIONS (los tiempos de subtítulos dependen de ellas). */
-  boundaryOuts: Record<number, string>
+  /** transition.out de la 1.ª, 2.ª y 3.ª transición del Reel (después, en ciclo). */
+  outs: readonly string[]
+  /** Entrada (transition.in) del clip que sigue a la 3.ª transición. */
   clip6In: string
   introEffect: string | null
   cutEffect: (sequenceIndex: number) => string | null
@@ -170,24 +180,25 @@ interface CutLook {
 }
 
 const LEGACY_CUT_LOOK: CutLook = {
-  boundaryOuts: CLIP_BOUNDARY_TRANSITIONS,
+  outs: LEGACY_TRANSITION_OUTS,
   clip6In: CLIP_6_ENTER_TRANSITION_IN,
   introEffect: FIRST_CLIP_INTRO_EFFECT,
   cutEffect: () => 'zoomIn',
   filter: null,
 }
 
+/** transition.out del corte `clipIndex` si termina en transición (según `transitionBoundaries`). */
+function transitionOutAt(look: CutLook, boundaries: number[], clipIndex: number): string | undefined {
+  const ordinal = boundaries.indexOf(clipIndex)
+  return ordinal < 0 ? undefined : look.outs[ordinal % look.outs.length]
+}
+
 function cutLookFromPlan(plan: VisualPlan | null): CutLook {
   if (!plan) return LEGACY_CUT_LOOK
   const { outs, clip6In } = CUT_TRANSITIONS[plan.transitions]
-  const boundaries = Object.keys(CLIP_BOUNDARY_TRANSITIONS).map(Number).sort((x, y) => x - y)
-  const boundaryOuts: Record<number, string> = {}
-  boundaries.forEach((b, k) => {
-    boundaryOuts[b] = outs[k] ?? outs[0]
-  })
   const camera = cameraEffects(plan.camera_motion)
   return {
-    boundaryOuts,
+    outs,
     clip6In,
     introEffect: camera.intro,
     cutEffect: camera.forCut,
@@ -297,7 +308,8 @@ function shotstackOrientationTransform(
 function buildFirstClipIntroClips(
   item: SequenceItem,
   src: string,
-  withSlideOut: boolean,
+  /** transition.out si el primer corte termina en transición. */
+  slideOut: string | undefined,
   dialogueVolume: number,
   look: CutLook,
   rotateAngle?: number | null
@@ -337,35 +349,19 @@ function buildFirstClipIntroClips(
     clips.push(mk(introDur, remain, introDur))
   }
 
-  if (withSlideOut) {
+  if (slideOut) {
     const last = clips[clips.length - 1]!
-    last.transition = { out: look.boundaryOuts[0]! }
+    last.transition = { out: slideOut }
   }
 
   return clips
-}
-
-function countActiveClipTransitions(sequenceLength: number): number {
-  let n = 0
-  for (const boundary of Object.keys(CLIP_BOUNDARY_TRANSITIONS).map(Number)) {
-    if (boundary + 1 < sequenceLength) n++
-  }
-  return n
-}
-
-function countOverlapsBeforeClip(clipIndex: number, sequenceLength: number): number {
-  let n = 0
-  for (const boundary of Object.keys(CLIP_BOUNDARY_TRANSITIONS).map(Number)) {
-    if (clipIndex > boundary && boundary + 1 < sequenceLength) n++
-  }
-  return n
 }
 
 function computeClipVideoStartSec(sequence: SequenceItem[], clipIndex: number): number {
   const linearStarts = computeLinearStarts(sequence)
   const raw =
     linearStarts[clipIndex]! -
-    CLIP_TRANSITION_OVERLAP_SEC * countOverlapsBeforeClip(clipIndex, sequence.length)
+    CLIP_TRANSITION_OVERLAP_SEC * countClipTransitionOverlapsBefore(clipIndex, sequence)
   // Shotstack exige start >= 0; si el 1.er clip es muy corto, el overlap puede quedar negativo.
   return Number(Math.max(0, raw).toFixed(3))
 }
@@ -430,18 +426,6 @@ function buildClipFlashTransitionTrack(
   }
 }
 
-function buildClipBoundaryTransition(
-  clipIndex: number,
-  sequenceLength: number,
-  look: CutLook
-): { out?: string } {
-  const out = look.boundaryOuts[clipIndex]
-  if (out && clipIndex + 1 < sequenceLength) {
-    return { out }
-  }
-  return {}
-}
-
 function buildVideoTracks(
   sequence: SequenceItem[],
   clipUrls: string[],
@@ -450,7 +434,11 @@ function buildVideoTracks(
   clipRotateAngles?: Array<number | null | undefined>
 ): ShotstackTrack[] {
   const overlap = CLIP_TRANSITION_OVERLAP_SEC
-  const transitionCount = countActiveClipTransitions(sequence.length)
+  const boundaries = transitionBoundaries(sequence)
+  const transitionCount = boundaries.length
+  // La 3.ª transición: el clip que sale se alarga y el que entra hace wipe sobre un underlay suyo.
+  const wipeHolderIndex = boundaries[WIPE_IN_TRANSITION_ORDINAL]
+  const wipeEnterIndex = wipeHolderIndex != null ? wipeHolderIndex + 1 : null
   const angleFor = (clipIndex: number) => clipRotateAngles?.[clipIndex]
 
   if (sequence.length === 0) return []
@@ -489,7 +477,7 @@ function buildVideoTracks(
         clips: buildFirstClipIntroClips(
           item,
           src,
-          false,
+          undefined,
           dialogueVolume,
           look,
           angleFor(item.clip_index)
@@ -507,7 +495,7 @@ function buildVideoTracks(
     ...buildFirstClipIntroClips(
       item0,
       src0,
-      !!look.boundaryOuts[0],
+      transitionOutAt(look, boundaries, 0),
       dialogueVolume,
       look,
       angleFor(item0.clip_index)
@@ -522,30 +510,30 @@ function buildVideoTracks(
       length = Number((length + overlap * transitionCount).toFixed(3))
     }
 
-    let extras: Partial<ShotstackClip> = {}
-    const boundaryTransition = buildClipBoundaryTransition(i, sequence.length, look)
-    if (Object.keys(boundaryTransition).length > 0) {
-      extras.transition = boundaryTransition
-    }
+    const extras: Partial<ShotstackClip> = {}
+    const transition: { out?: string; in?: string } = {}
+    const out = transitionOutAt(look, boundaries, i)
+    if (out) transition.out = out
 
-    // Clip 5: alargar hasta cubrir el wipe del 6º (fadeFast arriba)
-    if (i === CLIP_6_AT_INDEX - 1 && sequence.length > CLIP_6_AT_INDEX) {
-      const clip6Start = computeClipVideoStartSec(sequence, CLIP_6_AT_INDEX)
-      const holdThrough = Number((clip6Start + CLIP_6_WIPE_UNDERLAY_SEC - start).toFixed(3))
+    // Clip que sale en la 3.ª transición: alargar hasta cubrir el wipe del siguiente (fadeFast arriba)
+    if (i === wipeHolderIndex && wipeEnterIndex != null) {
+      const enterStart = computeClipVideoStartSec(sequence, wipeEnterIndex)
+      const holdThrough = Number((enterStart + CLIP_6_WIPE_UNDERLAY_SEC - start).toFixed(3))
       length = Number(Math.max(length, holdThrough).toFixed(3))
     }
 
-    // Clip 6: underlay del 5 + wipeLeft in (sin negro bajo el wipe)
-    if (i === CLIP_6_AT_INDEX && sequence.length > CLIP_6_AT_INDEX) {
-      const clip5Item = sequence[CLIP_6_AT_INDEX - 1]!
-      const clip5Src = clipUrls[clip5Item.clip_index] ?? clipUrls[0]
-      const clip5Start = computeClipVideoStartSec(sequence, CLIP_6_AT_INDEX - 1)
-      const elapsed = Math.max(0, start - clip5Start)
-      const underlayTrim = Number((clip5Item.trim_start + elapsed).toFixed(3))
-      bottomClips.push({
+    // Clip que entra en la 3.ª transición: underlay del anterior + wipe in (sin negro bajo el wipe)
+    if (i === wipeEnterIndex && wipeHolderIndex != null) {
+      const holderItem = sequence[wipeHolderIndex]!
+      const holderSrc = clipUrls[holderItem.clip_index] ?? clipUrls[0]
+      const holderStart = computeClipVideoStartSec(sequence, wipeHolderIndex)
+      const elapsed = Math.max(0, start - holderStart)
+      const underlayTrim = Number((holderItem.trim_start + elapsed).toFixed(3))
+      // En la misma pista que el clip que entra (así era con el 6.º clip, en la de abajo).
+      ;(i % 2 === 0 ? topClips : bottomClips).push({
         asset: {
           type: 'video',
-          src: clip5Src,
+          src: holderSrc,
           trim: underlayTrim,
           volume: 0,
           transcode: true,
@@ -553,11 +541,13 @@ function buildVideoTracks(
         start: Number(start.toFixed(3)),
         length: CLIP_6_WIPE_UNDERLAY_SEC,
         fit: 'cover',
-        ...shotstackOrientationTransform(angleFor(clip5Item.clip_index)),
+        ...shotstackOrientationTransform(angleFor(holderItem.clip_index)),
         ...(look.filter ? { filter: look.filter } : {}),
       })
-      extras.transition = { in: look.clip6In }
+      // Si este corte también termina en transición, conserva su salida.
+      transition.in = look.clip6In
     }
+    if (transition.out || transition.in) extras.transition = transition
 
     const clip = buildMainClip(i, start, extras)
     if (i % 2 === 0) topClips.push(clip)
@@ -938,8 +928,24 @@ export function resolveClipTransitionWhooshUrl(): string {
   ).trim()
 }
 
+/** Sin decisión de Claude (Reels viejos): el 4.º corte, como siempre. Con el plan nuevo: el que eligió, o ninguno. */
+function flashCutIndex(sequence: SequenceItem[], plan: VisualPlan | null): number | null {
+  if (plan?.flash_segment_id === undefined) return CLIP_FLASH_AT_CLIP_INDEX
+  if (plan.flash_segment_id === null) return null
+  const index = sequence.findIndex((item) => item.segment_id === plan.flash_segment_id)
+  return index > 0 ? index : null
+}
+
+/** Cortes que entran con whoosh: cada transición y el destello; sin decisión de Claude, el 2.º y el 4.º. */
+function whooshCutIndices(sequence: SequenceItem[], flashIndex: number | null): number[] {
+  if (!hasDecidedTransitions(sequence)) return [...CLIP_WHOOSH_AT_CLIP_INDICES]
+  const entering = transitionBoundaries(sequence).map((b) => b + 1)
+  return [...new Set(flashIndex != null ? [...entering, flashIndex] : entering)].sort((a, b) => a - b)
+}
+
 function buildClipTransitionWhooshTrack(
   sequence: SequenceItem[],
+  cutIndices: readonly number[],
   jobId?: string
 ): ShotstackTrack | null {
   const url = resolveClipTransitionWhooshUrl()
@@ -947,7 +953,7 @@ function buildClipTransitionWhooshTrack(
 
   const clips: ShotstackClip[] = []
 
-  for (const clipIndex of CLIP_WHOOSH_AT_CLIP_INDICES) {
+  for (const clipIndex of cutIndices) {
     if (sequence.length <= clipIndex) continue
     const cutSec = computeClipVideoStartSec(sequence, clipIndex)
     const start = Number(Math.max(0, cutSec - CLIP_TRANSITION_WHOOSH_LEAD_SEC).toFixed(3))
@@ -967,7 +973,8 @@ function buildClipTransitionWhooshTrack(
 
   if (jobId) {
     console.log(
-      `[Shotstack][${jobId}] SFX whoosh clip 2/4 → ${clips.length} hit(s) vol=${CLIP_TRANSITION_WHOOSH_VOLUME} ` +
+      `[Shotstack][${jobId}] SFX whoosh cortes [${cutIndices.map((i) => i + 1).join(', ')}] → ` +
+        `${clips.length} hit(s) vol=${CLIP_TRANSITION_WHOOSH_VOLUME} ` +
         clips.map((c) => `t=${(c.start as number).toFixed(2)}s`).join(', ')
     )
   }
@@ -2254,13 +2261,16 @@ export async function renderSegmentsV2(
     )
   }
 
-  for (const part of layout.parts) {
-    const flashTrack = buildClipFlashTransitionTrack(part.sequence, CLIP_FLASH_AT_CLIP_INDEX, jobId, {
-      label: 'clip 4',
+  const flashIndexByPart = layout.parts.map((part) => flashCutIndex(part.sequence, visualPlan))
+  layout.parts.forEach((part, p) => {
+    const flashIndex = flashIndexByPart[p]
+    if (flashIndex == null) return
+    const flashTrack = buildClipFlashTransitionTrack(part.sequence, flashIndex, jobId, {
+      label: `clip ${flashIndex + 1}`,
       ...(visualPlan ? { colors: PALETTE_COLORS[visualPlan.palette].flash } : {}),
     })
     if (flashTrack) tracks.unshift(...shiftTracks([flashTrack], part.offsetSec))
-  }
+  })
 
   const musicTrack = buildMusicTrack(musicUrl, totalDuration, musicTrim, musicVolume)
   if (musicTrack) tracks.push(musicTrack)
@@ -2274,10 +2284,11 @@ export async function renderSegmentsV2(
   const highlightSfxTrack = buildHighlightSfxTrack(captionBlocksToRender, totalDuration, jobId)
   if (highlightSfxTrack) tracks.push(highlightSfxTrack)
 
-  for (const part of layout.parts) {
-    const whooshSfxTrack = buildClipTransitionWhooshTrack(part.sequence, jobId)
+  layout.parts.forEach((part, p) => {
+    const whooshCuts = whooshCutIndices(part.sequence, flashIndexByPart[p] ?? null)
+    const whooshSfxTrack = buildClipTransitionWhooshTrack(part.sequence, whooshCuts, jobId)
     if (whooshSfxTrack) tracks.push(...shiftTracks([whooshSfxTrack], part.offsetSec))
-  }
+  })
 
   const brandPopSfxTrack = buildBrandTitlePopSfxTrack(brandStart, totalDuration, hasBrandOverlays, jobId)
   if (brandPopSfxTrack) tracks.push(brandPopSfxTrack)

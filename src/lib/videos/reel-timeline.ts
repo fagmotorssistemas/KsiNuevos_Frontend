@@ -3,18 +3,64 @@ import type { SequenceItem } from './segmenter'
 /** Debe coincidir con `CLIP_TRANSITION_OVERLAP_SEC` en shotstack.ts */
 export const CLIP_TRANSITION_OVERLAP_SEC = 0.5
 
-/** Índices de corte con transición (*Fast ≈ 0.5 s de solapamiento) */
+/**
+ * Cortes con transición de siempre (cortes 1→2, 2→3 y 5→6), para secuencias en que Claude no
+ * decidió las transiciones: Reels viejos, Motion 3D y montajes deterministas.
+ */
 export const CLIP_BOUNDARY_INDICES = [0, 1, 4] as const
 
-export function countClipTransitionOverlapsBefore(
-  clipIndex: number,
-  sequenceLength: number
-): number {
-  let n = 0
-  for (const boundary of CLIP_BOUNDARY_INDICES) {
-    if (clipIndex > boundary && boundary + 1 < sequenceLength) n++
-  }
-  return n
+/** Una transición solapa los dos cortes 0,5 s: con cortes más cortos que esto no cabe. */
+export const MIN_CUT_SEC_FOR_TRANSITION = 1.2
+/** Más transiciones que esto cansan; el ritmo lo dan los cortes secos. */
+export const MAX_TRANSITIONS_PER_REEL = 4
+
+/** True si Claude marcó en la secuencia qué cortes llevan transición (`transition_after`). */
+export function hasDecidedTransitions(sequence: SequenceItem[]): boolean {
+  return sequence.some((item) => typeof item.transition_after === 'boolean')
+}
+
+/**
+ * Índices `i` con transición entre el corte i y el i+1 (cada una solapa CLIP_TRANSITION_OVERLAP_SEC).
+ * Los decide Claude con `transition_after`; si la secuencia no los trae, son los de siempre.
+ */
+export function transitionBoundaries(sequence: SequenceItem[]): number[] {
+  const candidates = hasDecidedTransitions(sequence)
+    ? sequence.flatMap((item, i) => (item.transition_after === true ? [i] : []))
+    : [...CLIP_BOUNDARY_INDICES]
+  return candidates.filter((b) => b + 1 < sequence.length)
+}
+
+export function countClipTransitionOverlapsBefore(clipIndex: number, sequence: SequenceItem[]): number {
+  return transitionBoundaries(sequence).filter((b) => clipIndex > b).length
+}
+
+/**
+ * Deja válidas las transiciones que eligió Claude: solo entre cortes de al menos
+ * MIN_CUT_SEC_FOR_TRANSITION, nunca después del último y como mucho MAX_TRANSITIONS_PER_REEL.
+ * Marca todos los cortes (true/false) para que la secuencia siga contando como "decidida".
+ * Sin decisión de Claude devuelve la secuencia tal cual (transiciones de siempre).
+ *
+ * `hardCutAfterIndex`: corte seco obligado después de ese índice (la entrada al bloque de voz en off,
+ * que el render arma como tramo aparte), para que no cuente dentro del máximo.
+ */
+export function normalizeTransitionFlags(
+  sequence: SequenceItem[],
+  opts?: { hardCutAfterIndex?: number }
+): SequenceItem[] {
+  if (!hasDecidedTransitions(sequence)) return sequence
+  let kept = 0
+  return sequence.map((item, i) => {
+    const next = sequence[i + 1]
+    const ok =
+      item.transition_after === true &&
+      i !== opts?.hardCutAfterIndex &&
+      next != null &&
+      item.trim_duration >= MIN_CUT_SEC_FOR_TRANSITION &&
+      next.trim_duration >= MIN_CUT_SEC_FOR_TRANSITION &&
+      kept < MAX_TRANSITIONS_PER_REEL
+    if (ok) kept++
+    return { ...item, transition_after: ok }
+  })
 }
 
 /** Inicio del clip `clipIndex` en la timeline del Reel (resta solapamientos de transición). */
@@ -23,8 +69,7 @@ export function computeReelClipStartSec(sequence: SequenceItem[], clipIndex: num
   for (let i = 0; i < clipIndex; i++) {
     linearSec += sequence[i]!.trim_duration
   }
-  const overlapSec =
-    CLIP_TRANSITION_OVERLAP_SEC * countClipTransitionOverlapsBefore(clipIndex, sequence.length)
+  const overlapSec = CLIP_TRANSITION_OVERLAP_SEC * countClipTransitionOverlapsBefore(clipIndex, sequence)
   return Number(Math.max(0, linearSec - overlapSec).toFixed(3))
 }
 

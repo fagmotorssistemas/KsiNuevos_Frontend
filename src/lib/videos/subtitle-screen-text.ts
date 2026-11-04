@@ -1,20 +1,9 @@
 import type { GuionEscena } from '@/types/video-script'
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
-
-/** Debe coincidir con `CLIP_TRANSITION_OVERLAP_SEC` / boundaries en shotstack.ts */
-const CLIP_TRANSITION_OVERLAP_SEC = 0.5
-const CLIP_BOUNDARY_INDICES = [0, 1, 4] as const
+import { CLIP_TRANSITION_OVERLAP_SEC, countClipTransitionOverlapsBefore } from './reel-timeline'
 
 /** Escenas 0–2: apertura, marca/motor y transmisión — mantienen timeline lineal (título + SFX). */
 const SUBTITLE_LINEAR_TIMELINE_UNTIL_SCENE_INDEX = 3
-
-function countClipTransitionOverlapsBefore(clipIndex: number, sequenceLength: number): number {
-  let n = 0
-  for (const boundary of CLIP_BOUNDARY_INDICES) {
-    if (clipIndex > boundary && boundary + 1 < sequenceLength) n++
-  }
-  return n
-}
 
 /** Inicio real del clip en la timeline de Shotstack (resta solapamientos de transición). */
 function computeVideoTimelineStartMs(sequence: SequenceItem[], clipIndex: number): number {
@@ -22,7 +11,7 @@ function computeVideoTimelineStartMs(sequence: SequenceItem[], clipIndex: number
   for (let i = 0; i < clipIndex; i++) {
     linearMs += sequence[i]!.trim_duration * 1000
   }
-  const overlapMs = CLIP_TRANSITION_OVERLAP_SEC * 1000 * countClipTransitionOverlapsBefore(clipIndex, sequence.length)
+  const overlapMs = CLIP_TRANSITION_OVERLAP_SEC * 1000 * countClipTransitionOverlapsBefore(clipIndex, sequence)
   return Number(Math.max(0, linearMs - overlapMs).toFixed(3))
 }
 
