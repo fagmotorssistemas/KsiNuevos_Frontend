@@ -84,7 +84,7 @@ import {
   VOICE_OVER_EXTERNAL_CLIP_INDEX,
   type VoiceOverIntroRenderInput,
 } from './reel-render-inputs'
-import { renderSegmentsV2, getShotstackRenderStatus, resolveCaptionStyleVersion } from './shotstack'
+import { renderSegmentsV2, getShotstackRenderStatus, resolveCaptionStyleVersion, completedReelPatch } from './shotstack'
 import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from './audio-balance'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
 import { extractSegmentFrames } from './segment-frames'
@@ -689,11 +689,7 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
       if (render.status === 'done') {
         const finalUrl = await resolveFinalReelVideoUrl(render.url, jobId)
         await updateJob(jobId, {
-          status: 'completed',
-          final_video_url: finalUrl ?? undefined,
-          final_video_duration: render.duration ?? null,
-          error_message: null,
-          progress_percentage: 100,
+          ...completedReelPatch(render, finalUrl),
           current_step: 'Video listo (confirmado por polling Shotstack)',
         })
         return

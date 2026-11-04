@@ -2184,3 +2184,14 @@ export async function getShotstackRenderStatus(renderId: string): Promise<Shotst
     duration: typeof duration === 'number' && duration > 0 ? duration : undefined,
   }
 }
+
+/** Campos para marcar un Reel como terminado cuando Shotstack confirma el render (webhook y monitor). */
+export function completedReelPatch(render: ShotstackRenderStatus, finalUrl: string | null) {
+  return {
+    status: 'completed' as const,
+    final_video_url: finalUrl,
+    final_video_duration: render.duration ?? null,
+    error_message: null,
+    progress_percentage: 100,
+  }
+}

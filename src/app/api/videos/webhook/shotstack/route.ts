@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { resolveFinalReelVideoUrl } from '@/lib/videos/storage'
-import { getShotstackRenderStatus } from '@/lib/videos/shotstack'
+import { completedReelPatch, getShotstackRenderStatus } from '@/lib/videos/shotstack'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -74,11 +74,7 @@ export async function POST(request: NextRequest) {
       const { error } = await supabase
         .from('video_jobs_v2')
         .update({
-          status: 'completed',
-          final_video_url: finalUrl,
-          final_video_duration: render.duration ?? null,
-          error_message: null,
-          progress_percentage: 100,
+          ...completedReelPatch(render, finalUrl),
           current_step: 'Video listo',
           social_publish_stage: job.social_publish_stage ?? 'generado',
         })
