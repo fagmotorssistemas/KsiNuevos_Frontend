@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
+import { Notice } from '@/components/ui/Notice'
 import type { NoticieroJob } from '@/lib/noticiero/types'
 import { canApproveNoticieroForPublish, resolveNoticieroSocialStage } from '@/lib/noticiero/publish-flow'
 
@@ -192,7 +193,7 @@ export default function NoticieroJobDetailPage() {
         )}
       </div>
 
-      {job.final_video_url && (
+      {job.final_video_url ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-4">Video</h2>
           {job.banner_title && (
@@ -202,7 +203,11 @@ export default function NoticieroJobDetailPage() {
             <video src={job.final_video_url} controls className="w-full h-full" playsInline />
           </div>
         </div>
-      )}
+      ) : job.status === 'completed' ? (
+        <Notice tone="warning" title="Video no disponible">
+          El video final ya no está disponible. Para tenerlo otra vez hay que generar un noticiero nuevo.
+        </Notice>
+      ) : null}
 
       {job.script_text && (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
