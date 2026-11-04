@@ -6,6 +6,8 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { SequenceItem, SubtitleBlock } from './segmenter'
 import type { BrandConfig, VoiceOverIntroRenderInput } from './reel-render-inputs'
+import { buildReelLayout, type ReelLayout } from './reel-timeline'
+import { planLinearBrollTiling, type VoBrollTile } from './vo-broll-semantics'
 import {
   CUT_TRANSITIONS,
   ENTRANCE_TRANSITION,
@@ -600,6 +602,145 @@ function buildBrollOverlayTracks(
   return clips.length > 0 ? [{ clips }] : []
 }
 
+/** Corre en el tiempo los clips de unas pistas (un tramo de cortes que empieza en `offsetSec`). */
+function shiftTracks(tracks: ShotstackTrack[], offsetSec: number): ShotstackTrack[] {
+  if (offsetSec === 0) return tracks
+  return tracks.map((track) => ({
+    clips: track.clips.map((clip) =>
+      typeof clip.start === 'number' ? { ...clip, start: Number((clip.start + offsetSec).toFixed(3)) } : clip
+    ),
+  }))
+}
+
+/** Inicio en el Reel del corte `index` de la secuencia completa (con voz en off, el tramo va corrido). */
+function cutStartInLayout(layout: ReelLayout, index: number): number {
+  const part = layout.parts.find((p) => index >= p.firstIndex && index < p.firstIndex + p.sequence.length)
+  if (!part) return 0
+  const local = computeClipVideoStartSec(part.sequence, index - part.firstIndex)
+  return part.offsetSec === 0 ? local : Number((part.offsetSec + local).toFixed(3))
+}
+
+const VO_MIN_TILE_SEC = 0.08
+
+/**
+ * Rellena los tramos del bloque de voz que quedaron sin toma (las tomas duran menos que la voz)
+ * repitiendo las tomas en ciclo, como hacía Creatomate: así no queda negro a mitad del Reel.
+ */
+function fillVoiceOverTileGaps(
+  tiles: VoBrollTile[],
+  voDurationSec: number,
+  brollOrder: number[],
+  clipFileDurationsSec: (number | null)[]
+): VoBrollTile[] {
+  if (brollOrder.length === 0) return tiles
+  const out: VoBrollTile[] = []
+  let cursor = 0
+  let next = 0
+  const fillUntil = (until: number) => {
+    for (let guard = 0; until - cursor >= VO_MIN_TILE_SEC && guard < 200; guard++) {
+      const clipIndex = brollOrder[next++ % brollOrder.length]!
+      const fileDur = clipFileDurationsSec[clipIndex]
+      const available = typeof fileDur === 'number' && Number.isFinite(fileDur) && fileDur > 0.05 ? fileDur : until - cursor
+      const duration = Number(Math.min(available, until - cursor).toFixed(3))
+      if (duration < VO_MIN_TILE_SEC) continue
+      out.push({ clipIndex, timeStart: Number(cursor.toFixed(3)), duration, trimStart: 0 })
+      cursor += duration
+    }
+  }
+  for (const tile of [...tiles].sort((a, b) => a.timeStart - b.timeStart)) {
+    if (tile.timeStart > cursor + 0.02) fillUntil(tile.timeStart)
+    out.push(tile)
+    cursor = Math.max(cursor, tile.timeStart + tile.duration)
+  }
+  fillUntil(voDurationSec)
+  return out
+}
+
+/**
+ * Bloque de voz en off: la voz completa (audio de un clip o un MP3) con tomas de apoyo sin sonido
+ * encima, en el orden que eligió el pipeline (`voBrollTiles`) o, si no hay, en orden de archivo.
+ * Con la voz de un clip, ese clip queda debajo y se ve donde no hay toma; con MP3 y sin tomas queda
+ * el fondo negro del timeline.
+ */
+function buildVoiceOverBlockTracks(
+  vo: VoiceOverIntroRenderInput,
+  clipUrls: string[],
+  startSec: number,
+  dialogueVolume: number,
+  look: CutLook,
+  jobId: string,
+  clipRotateAngles?: Array<number | null | undefined>
+): ShotstackTrack[] {
+  const voDur = Number(vo.voDurationSec.toFixed(3))
+  const at = (t: number) => Number((startSec + t).toFixed(3))
+  const usable = (tile: VoBrollTile) =>
+    tile.clipIndex !== vo.voClipIndex &&
+    Boolean(clipUrls[tile.clipIndex]) &&
+    Number.isFinite(tile.timeStart) &&
+    Number.isFinite(tile.duration) &&
+    tile.duration >= VO_MIN_TILE_SEC &&
+    tile.timeStart < voDur - 0.04
+
+  const brollOrder = vo.brollClipIndicesInFileOrder.filter((i) => i !== vo.voClipIndex && Boolean(clipUrls[i]))
+  let tiles = (vo.voBrollTiles ?? []).filter(usable)
+  if (tiles.length === 0) {
+    tiles = planLinearBrollTiling(voDur, brollOrder, vo.clipFileDurationsSec).filter(usable)
+  }
+  tiles = fillVoiceOverTileGaps(tiles, voDur, brollOrder, vo.clipFileDurationsSec)
+
+  const tileClips: ShotstackClip[] = tiles.map((tile, i) => {
+    const effect = i > 0 ? look.cutEffect(i) : null
+    return {
+      asset: {
+        type: 'video',
+        src: clipUrls[tile.clipIndex]!,
+        trim: Number(tile.trimStart.toFixed(3)),
+        volume: 0,
+        transcode: true,
+      },
+      start: at(tile.timeStart),
+      length: Number(Math.min(tile.duration, voDur - tile.timeStart).toFixed(3)),
+      fit: 'cover',
+      ...shotstackOrientationTransform(clipRotateAngles?.[tile.clipIndex]),
+      ...(look.filter ? { filter: look.filter } : {}),
+      ...(effect ? { effect } : {}),
+    }
+  })
+
+  let voice: ShotstackClip
+  if (vo.voClipIndex >= 0) {
+    const src = clipUrls[vo.voClipIndex]
+    if (!src) throw new Error(`[Shotstack] Bloque de voz en off: falta la URL del clip ${vo.voClipIndex}.`)
+    voice = {
+      asset: { type: 'video', src, trim: 0, volume: dialogueVolume, transcode: true },
+      start: at(0),
+      length: voDur,
+      fit: 'cover',
+      ...shotstackOrientationTransform(clipRotateAngles?.[vo.voClipIndex]),
+      ...(look.filter ? { filter: look.filter } : {}),
+    }
+  } else {
+    const src = vo.externalVoiceAudioUrl?.trim()
+    if (!src) throw new Error('[Shotstack] Bloque de voz en off: falta la URL del audio MP3.')
+    voice = {
+      asset: {
+        type: 'audio',
+        src,
+        trim: Number((vo.externalVoiceTrimStartSec ?? 0).toFixed(3)),
+        volume: dialogueVolume,
+      },
+      start: at(0),
+      length: voDur,
+    }
+  }
+
+  console.log(
+    `[Shotstack][${jobId}] Voz en off ${vo.voClipIndex >= 0 ? `del clip ${vo.voClipIndex}` : 'MP3'} → ` +
+      `t=${startSec.toFixed(2)}s +${voDur.toFixed(2)}s, ${tileClips.length} tomas de apoyo`
+  )
+  return [...(tileClips.length > 0 ? [{ clips: tileClips }] : []), { clips: [voice] }]
+}
+
 function buildMusicTrack(
   musicUrl: string,
   totalDuration: number,
@@ -887,6 +1028,8 @@ function overlapsAny(start: number, end: number, busy: BusyWindow[]): boolean {
 function buildVisualPlanOverlayTracks(
   plan: VisualPlan,
   sequence: SequenceItem[],
+  /** Inicio en el Reel de cada corte de `sequence` (con voz en off, los de después van corridos). */
+  cutStartSec: (index: number) => number,
   totalDuration: number,
   busy: BusyWindow[],
   jobId: string
@@ -924,7 +1067,7 @@ function buildVisualPlanOverlayTracks(
   plan.spec_cards.forEach((card) => {
     const idx = sequence.findIndex((it) => it.segment_id === card.segment_id)
     if (idx < 0) return
-    const start = computeClipVideoStartSec(sequence, idx)
+    const start = cutStartSec(idx)
     const length = Number(Math.min(CARD_LENGTH_SEC, sequence[idx]!.trim_duration, totalDuration - start).toFixed(3))
     if (length < 0.8 || overlapsAny(start, start + length, taken)) return
     const side = cardClips.length % 2 === 0 ? -1 : 1
@@ -1813,25 +1956,38 @@ export async function renderSegmentsV2(
     visualPlan?: VisualPlan | null
   }
 ): Promise<string> {
-  if (voiceOverIntro != null) {
-    throw new Error(
-      '[Shotstack] voiceOverIntro aún no está soportado. Desactiva VO manual/MP3 para este render.'
-    )
-  }
-
   const { apiKey, baseUrl, callbackBase } = assertShotstackEnv()
 
-  const totalDuration = Number(
-    sequence.reduce((acc, it) => acc + Number(it.trim_duration.toFixed(3)), 0).toFixed(3)
+  // Con voz en off: cortes de antes → bloque de voz → cortes de después (mismos tiempos que los subtítulos).
+  const layout = buildReelLayout(
+    sequence,
+    voiceOverIntro
+      ? {
+          insertAfterSegmentCount: voiceOverIntro.insertAfterSegmentCount,
+          voDurationSec: voiceOverIntro.voDurationSec,
+        }
+      : null
   )
 
+  const totalDuration = voiceOverIntro
+    ? layout.totalDurationSec
+    : Number(sequence.reduce((acc, it) => acc + Number(it.trim_duration.toFixed(3)), 0).toFixed(3))
+
   // Sin tramo manual → "Selección inteligente": parte más fuerte de la canción, alineada a los cortes.
-  let cutStartAcc = 0
-  const cutStartTimesSec = sequence.map((it) => {
-    const t = Number(cutStartAcc.toFixed(3))
-    cutStartAcc += it.trim_duration
-    return t
-  })
+  let cutStartTimesSec: number[]
+  if (voiceOverIntro) {
+    cutStartTimesSec = layout.parts
+      .flatMap((p) => computeLinearStarts(p.sequence).map((s) => Number((p.offsetSec + s).toFixed(3))))
+      .concat(layout.voiceOver ? [layout.voiceOver.startSec] : [])
+      .sort((a, b) => a - b)
+  } else {
+    let cutStartAcc = 0
+    cutStartTimesSec = sequence.map((it) => {
+      const t = Number(cutStartAcc.toFixed(3))
+      cutStartAcc += it.trim_duration
+      return t
+    })
+  }
   const musicTrim =
     opts?.musicTrimStartSecOverride ??
     (await pickSmartMusicTrimStartSec({
@@ -2039,7 +2195,16 @@ export async function renderSegmentsV2(
     const busy: BusyWindow[] = []
     if (hasBrandOverlays) busy.push([brandStart, brandStart + brandLength])
     if (opts?.comentaMentionTimeSec != null) busy.push([opts.comentaMentionTimeSec, totalDuration])
-    tracks.push(...buildVisualPlanOverlayTracks(visualPlan, sequence, totalDuration, busy, jobId))
+    tracks.push(
+      ...buildVisualPlanOverlayTracks(
+        visualPlan,
+        sequence,
+        (i) => cutStartInLayout(layout, i),
+        totalDuration,
+        busy,
+        jobId
+      )
+    )
   }
 
   const logoUrl = resolveClosingLogoUrl(callbackBase, opts?.brandConfig ?? null)
@@ -2063,14 +2228,39 @@ export async function renderSegmentsV2(
     )
   }
   const cutLook = cutLookFromPlan(visualPlan)
-  tracks.push(...buildBrollOverlayTracks(sequence, clipUrls, cutLook.filter, clipRotateAngles))
-  tracks.push(...buildVideoTracks(sequence, clipUrls, dialogueVolume, cutLook, clipRotateAngles))
+  // Cada tramo de cortes es un mini-Reel con sus transiciones, destello y whoosh (sin voz en off, uno solo).
+  for (const part of layout.parts) {
+    tracks.push(
+      ...shiftTracks(buildBrollOverlayTracks(part.sequence, clipUrls, cutLook.filter, clipRotateAngles), part.offsetSec)
+    )
+    tracks.push(
+      ...shiftTracks(
+        buildVideoTracks(part.sequence, clipUrls, dialogueVolume, cutLook, clipRotateAngles),
+        part.offsetSec
+      )
+    )
+  }
+  if (voiceOverIntro && layout.voiceOver) {
+    tracks.push(
+      ...buildVoiceOverBlockTracks(
+        voiceOverIntro,
+        clipUrls,
+        layout.voiceOver.startSec,
+        dialogueVolume,
+        cutLook,
+        jobId,
+        clipRotateAngles
+      )
+    )
+  }
 
-  const flashTrack = buildClipFlashTransitionTrack(sequence, CLIP_FLASH_AT_CLIP_INDEX, jobId, {
-    label: 'clip 4',
-    ...(visualPlan ? { colors: PALETTE_COLORS[visualPlan.palette].flash } : {}),
-  })
-  if (flashTrack) tracks.unshift(flashTrack)
+  for (const part of layout.parts) {
+    const flashTrack = buildClipFlashTransitionTrack(part.sequence, CLIP_FLASH_AT_CLIP_INDEX, jobId, {
+      label: 'clip 4',
+      ...(visualPlan ? { colors: PALETTE_COLORS[visualPlan.palette].flash } : {}),
+    })
+    if (flashTrack) tracks.unshift(...shiftTracks([flashTrack], part.offsetSec))
+  }
 
   const musicTrack = buildMusicTrack(musicUrl, totalDuration, musicTrim, musicVolume)
   if (musicTrack) tracks.push(musicTrack)
@@ -2084,8 +2274,10 @@ export async function renderSegmentsV2(
   const highlightSfxTrack = buildHighlightSfxTrack(captionBlocksToRender, totalDuration, jobId)
   if (highlightSfxTrack) tracks.push(highlightSfxTrack)
 
-  const whooshSfxTrack = buildClipTransitionWhooshTrack(sequence, jobId)
-  if (whooshSfxTrack) tracks.push(whooshSfxTrack)
+  for (const part of layout.parts) {
+    const whooshSfxTrack = buildClipTransitionWhooshTrack(part.sequence, jobId)
+    if (whooshSfxTrack) tracks.push(...shiftTracks([whooshSfxTrack], part.offsetSec))
+  }
 
   const brandPopSfxTrack = buildBrandTitlePopSfxTrack(brandStart, totalDuration, hasBrandOverlays, jobId)
   if (brandPopSfxTrack) tracks.push(brandPopSfxTrack)
