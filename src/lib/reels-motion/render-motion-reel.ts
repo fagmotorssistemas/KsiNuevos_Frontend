@@ -140,8 +140,15 @@ async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>)
   )
 }
 
-/** Renderiza el Reel y devuelve la ruta del MP4 (dentro de motionWorkDir). */
-export async function renderMotionReel(input: MotionRenderInput, onProgress: MotionProgress): Promise<string> {
+export interface MotionRenderResult {
+  /** Ruta del MP4 (dentro de motionWorkDir). */
+  file: string
+  /** Duración del MP4 en segundos. */
+  durationSec: number
+}
+
+/** Renderiza el Reel y devuelve el MP4 con su duración. */
+export async function renderMotionReel(input: MotionRenderInput, onProgress: MotionProgress): Promise<MotionRenderResult> {
   const { jobId } = input
   const log = (msg: string) => console.log(`[VideoV2Pipeline][${jobId}][Motion3D] ${msg}`)
   const ff = await resolveFfmpegBinaries()
@@ -289,5 +296,7 @@ export async function renderMotionReel(input: MotionRenderInput, onProgress: Mot
     },
   })
   log(`Render listo en ${Math.round((Date.now() - started) / 1000)} s`)
-  return outFile
+  // Se mide el MP4 real; si ffprobe falla, vale la duración de la composición.
+  const measured = await probeClip(ff, outFile).then((p) => p.durationSec, () => null)
+  return { file: outFile, durationSec: measured ?? composed.totalSec }
 }

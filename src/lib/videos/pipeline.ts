@@ -241,7 +241,7 @@ async function fetchInventoryMileageKm(vehicleId: string | null | undefined): Pr
 function startMotionRender(jobId: string, input: Omit<MotionRenderInput, 'jobId'>) {
   setImmediate(async () => {
     try {
-      const file = await renderMotionReel({ jobId, ...input }, (pct, step) =>
+      const { file, durationSec } = await renderMotionReel({ jobId, ...input }, (pct, step) =>
         updateJob(jobId, { progress_percentage: pct, current_step: step }).catch(() => {})
       )
       // El render tarda minutos: si borraron el job mientras tanto, no se sube un reel sin dueño.
@@ -255,6 +255,7 @@ function startMotionRender(jobId: string, input: Omit<MotionRenderInput, 'jobId'
       await updateJob(jobId, {
         status: 'completed',
         final_video_url: url,
+        final_video_duration: Number(durationSec.toFixed(2)),
         progress_percentage: 100,
         current_step: 'Video listo (Motion 3D)',
       })
@@ -689,6 +690,7 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
         await updateJob(jobId, {
           status: 'completed',
           final_video_url: finalUrl ?? undefined,
+          final_video_duration: render.duration ?? null,
           progress_percentage: 100,
           current_step: 'Video listo (confirmado por polling Shotstack)',
         })

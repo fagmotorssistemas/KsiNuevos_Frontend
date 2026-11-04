@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
         .update({
           status: 'completed',
           final_video_url: finalUrl,
+          final_video_duration: render.duration ?? null,
           progress_percentage: 100,
           current_step: 'Video listo',
           social_publish_stage: job.social_publish_stage ?? 'generado',

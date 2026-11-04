@@ -2148,9 +2148,20 @@ export async function renderSegmentsV2(
   return renderId
 }
 
-export async function getShotstackRenderStatus(
-  renderId: string
-): Promise<{ status: string; url?: string; error?: string }> {
+/** Campos que se usan de `GET /render/{id}` de Shotstack. */
+interface ShotstackRenderStatusJson {
+  response?: { status?: string; url?: string; error?: string; duration?: number }
+}
+
+export interface ShotstackRenderStatus {
+  status: string
+  url?: string
+  error?: string
+  /** Duración del MP4 final en segundos (llega cuando el render terminó). */
+  duration?: number
+}
+
+export async function getShotstackRenderStatus(renderId: string): Promise<ShotstackRenderStatus> {
   const { apiKey, baseUrl } = assertShotstackEnv()
   const statusUrl = `${baseUrl}/${renderId}`
   const res = await fetch(statusUrl, {
@@ -2164,10 +2175,12 @@ export async function getShotstackRenderStatus(
     const text = await res.text()
     throw new Error(`Shotstack status HTTP ${res.status}: ${text}`)
   }
-  const json = await res.json()
+  const json = (await res.json()) as ShotstackRenderStatusJson
+  const duration = json.response?.duration
   return {
-    status: json?.response?.status ?? 'unknown',
-    url: json?.response?.url ?? undefined,
-    error: json?.response?.error ?? undefined,
+    status: json.response?.status ?? 'unknown',
+    url: json.response?.url ?? undefined,
+    error: json.response?.error ?? undefined,
+    duration: typeof duration === 'number' && duration > 0 ? duration : undefined,
   }
 }
