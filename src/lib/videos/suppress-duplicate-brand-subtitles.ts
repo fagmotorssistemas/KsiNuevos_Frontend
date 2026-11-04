@@ -2,6 +2,7 @@ import type { SequenceItem, SubtitleBlock } from './segmenter'
 import {
   buildSequenceTimelineRanges,
   resolveClipIndexForReelTime,
+  type ReelLayout,
 } from './reel-timeline'
 import { wordFuzzyMatches } from './subtitle-screen-text'
 
@@ -271,6 +272,8 @@ export interface SuppressIntroClipVehicleSubsOpts {
   yearLine?: string | null
   sequence: SequenceItem[]
   guionSubtitleTimeline?: boolean
+  /** Con voz en off, los tiempos de los cortes salen de aquí (`buildReelLayout`). */
+  layout?: ReelLayout
 }
 
 /**
@@ -290,6 +293,7 @@ export function suppressIntroClipVehicleSubtitleDuplicates(
 
   const ranges = buildSequenceTimelineRanges(opts.sequence, {
     guionSubtitleTimeline: opts.guionSubtitleTimeline,
+    layout: opts.layout,
   })
 
   const out: SubtitleBlock[] = []

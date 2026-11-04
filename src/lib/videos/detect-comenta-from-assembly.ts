@@ -1,5 +1,5 @@
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
-import { computeReelClipStartMs } from './reel-timeline'
+import { computeReelClipStartMs, type ReelLayout } from './reel-timeline'
 import {
   buildComentaOverlayText,
   normalizeForMatch,
@@ -182,14 +182,19 @@ function resolveComentaOverlayFromSpeech(
 
 function findComentaHitInSequence(
   sequence: SequenceItem[],
-  allSegments: Segment[]
+  allSegments: Segment[],
+  layout?: ReelLayout
 ): ComentaTriggerHit | null {
   const segLookup = new Map<string, Segment>()
   for (const s of allSegments) segLookup.set(s.segment_id, s)
+  // Con voz en off, los cortes de después del bloque van corridos en el Reel.
+  const voLayout = layout?.voiceOver ? layout : null
 
   for (let seqIdx = 0; seqIdx < sequence.length; seqIdx++) {
     const item = sequence[seqIdx]!
-    const timelineOffsetMs = computeReelClipStartMs(sequence, seqIdx)
+    const timelineOffsetMs = voLayout
+      ? (voLayout.cutStartSec[seqIdx] ?? 0) * 1000
+      : computeReelClipStartMs(sequence, seqIdx)
     const seg = segLookup.get(item.segment_id)
     const trimStartMs = item.trim_start * 1000
     const trimEndMs = item.trim_end * 1000
@@ -267,10 +272,12 @@ export function applyComentaFromAssembly(
     modelLine?: string | null
     yearLine?: string | null
     jobId?: string
+    /** Tiempos de los cortes con voz en off (`buildReelLayout`). */
+    layout?: ReelLayout
   }
 ): ComentaFromAssemblyResult {
   const hit =
-    findComentaHitInSequence(sequence, allSegments) ?? findComentaHitInSubtitleBlocks(blocks)
+    findComentaHitInSequence(sequence, allSegments, opts?.layout) ?? findComentaHitInSubtitleBlocks(blocks)
 
   if (hit == null) {
     return { subtitleBlocks: blocks, comentaTimeSec: null, comentaOverlayText: null }

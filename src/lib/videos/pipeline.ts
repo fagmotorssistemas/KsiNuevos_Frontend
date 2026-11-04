@@ -28,6 +28,7 @@ import {
   sumSequenceItemsDurationSec,
 } from './segmenter'
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
+import { buildReelLayout, type ReelLayout } from './reel-timeline'
 import type { VideoClipKind, CanonicalVehicleMeta, ReelRenderEngine } from './clip-config'
 import {
   defaultClipKinds,
@@ -561,7 +562,8 @@ function applyComentaOverlayFromAssembly(
   sequence: SequenceItem[],
   allSegments: Segment[],
   brandConfig: Awaited<ReturnType<typeof loadBrandConfigForJob>>,
-  jobId: string
+  jobId: string,
+  layout?: ReelLayout
 ): {
   subtitleBlocks: SubtitleBlock[]
   comentaMentionTimeSec?: number
@@ -576,6 +578,7 @@ function applyComentaOverlayFromAssembly(
     modelLine: brandConfig.vehicle_line_2,
     yearLine: brandConfig.vehicle_line_4,
     jobId,
+    layout,
   })
 
   return {
@@ -591,13 +594,15 @@ async function applyShowcaseCaptionHighlights(
   sequence: SequenceItem[],
   brandConfig: BrandConfig | null,
   aiHighlights: AiHighlightPhrase[] | undefined,
-  brandMentionTimeSec?: number
+  brandMentionTimeSec?: number,
+  layout?: ReelLayout
 ): Promise<SubtitleBlock[]> {
   return applyCaptionHighlights({
     jobId,
     blocks: subtitleBlocks,
     sequence,
     brandMentionTimeSec,
+    layout,
     vehicleContext: {
       brand: brandConfig?.vehicle_line_1 ?? null,
       model: brandConfig?.vehicle_line_2 ?? null,
@@ -614,7 +619,8 @@ function applyBrandSubtitleDedup(
   sequence: SequenceItem[],
   jobId: string,
   guionSubtitleTimeline: boolean,
-  captionStyleVersion?: 'v1' | 'v2' | null
+  captionStyleVersion?: 'v1' | 'v2' | null,
+  layout?: ReelLayout
 ): SubtitleBlock[] {
   // V2 no usa título de marca: no quitar esas palabras de los subtítulos.
   if (resolveCaptionStyleVersion(captionStyleVersion) === 'v2') return subtitleBlocks
@@ -628,6 +634,7 @@ function applyBrandSubtitleDedup(
     yearLine: brandConfig.vehicle_line_4,
     sequence,
     guionSubtitleTimeline,
+    layout,
   })
 }
 
@@ -1072,6 +1079,18 @@ async function refreshVoiceOverIntroAudioUrl(
   if (!intro.voiceOverAudioPath) return intro
   const fresh = await resolveVoiceOverAudioUrl(intro.voiceOverAudioPath)
   return { ...intro, externalVoiceAudioUrl: fresh }
+}
+
+/** Tiempos del Reel con el bloque de voz en off (mismo cálculo que el render de Shotstack); sin voz, undefined. */
+function reelLayoutForVoiceOver(
+  sequence: SequenceItem[],
+  intro: VoiceOverIntroRenderInput | null
+): ReelLayout | undefined {
+  if (intro == null) return undefined
+  return buildReelLayout(sequence, {
+    insertAfterSegmentCount: intro.insertAfterSegmentCount,
+    voDurationSec: intro.voDurationSec,
+  })
 }
 
 /**
@@ -1711,13 +1730,17 @@ export async function runMultipleClipsPipelineFromStorage(
 
     subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
+    // Con voz en off, los cortes de después del bloque van corridos: mismos tiempos que el render.
+    const reelLayout = reelLayoutForVoiceOver(analysis.sequence, voIntroForRender)
+
     subtitleBlocks = applyBrandSubtitleDedup(
       subtitleBlocks,
       brandConfig,
       analysis.sequence,
       jobId,
       escenasMulti.length > 0,
-      captionStyleVersion
+      captionStyleVersion,
+      reelLayout
     )
 
     // En Motion 3D el "comenta" lo dibuja la caja de comentario del plan: los subtítulos quedan completos.
@@ -1727,7 +1750,8 @@ export async function runMultipleClipsPipelineFromStorage(
         analysis.sequence,
         allSegments,
         brandConfig,
-        jobId
+        jobId,
+        reelLayout
       )
       subtitleBlocks = comenta.subtitleBlocks
       if (comenta.comentaMentionTimeSec != null) {
@@ -1744,7 +1768,8 @@ export async function runMultipleClipsPipelineFromStorage(
       analysis.sequence,
       brandConfig,
       analysis.caption_highlights,
-      brandMentionTimeSec
+      brandMentionTimeSec,
+      reelLayout
     )
 
     if (motionFormatMulti) {
@@ -2521,6 +2546,7 @@ export async function rerunRenderForJob(
   subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
   const captionStyleVersion = captionStyleVersionFromPipelineMeta(sc)
+  const reelLayout = reelLayoutForVoiceOver(analysis.sequence, voIntroForRender)
 
   subtitleBlocks = applyBrandSubtitleDedup(
     subtitleBlocks,
@@ -2528,7 +2554,8 @@ export async function rerunRenderForJob(
     analysis.sequence,
     jobId,
     escenasRerun.length > 0,
-    captionStyleVersion
+    captionStyleVersion,
+    reelLayout
   )
 
   let comentaMentionTimeSecRerun: number | undefined
@@ -2539,7 +2566,8 @@ export async function rerunRenderForJob(
       analysis.sequence,
       allSegments,
       brandConfig,
-      jobId
+      jobId,
+      reelLayout
     )
     subtitleBlocks = comenta.subtitleBlocks
     comentaMentionTimeSecRerun = comenta.comentaMentionTimeSec
@@ -2551,7 +2579,9 @@ export async function rerunRenderForJob(
     subtitleBlocks,
     analysis.sequence,
     brandConfig,
-    analysis.caption_highlights
+    analysis.caption_highlights,
+    undefined,
+    reelLayout
   )
 
   const reelAudioVolumes = reelAudioVolumesFromPipelineMeta(sc)

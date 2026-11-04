@@ -2,6 +2,7 @@ import type { SequenceItem, SubtitleBlock, SubtitleHighlightFx } from './segment
 import { isDriveBadgeText } from './drive-badge'
 import { normalizeForMatch } from './subtitle-screen-text'
 import type { AiHighlightPhrase } from './claude-editor'
+import type { ReelLayout } from './reel-timeline'
 
 export type HighlightKind = 'spec' | 'feature' | 'emotional'
 
@@ -81,6 +82,8 @@ export interface ApplyCaptionHighlightsOpts {
   vehicleContext?: VehicleHighlightContext
   /** Frases elegidas por Claude en el análisis del montaje; sin ellas, solo léxico local. */
   aiHighlights?: AiHighlightPhrase[]
+  /** Tiempos de los cortes con voz en off (`buildReelLayout`). */
+  layout?: ReelLayout
 }
 
 function countClipTransitionOverlapsBefore(clipIndex: number, sequenceLength: number): number {
@@ -103,12 +106,17 @@ function computeVideoTimelineStartSec(sequence: SequenceItem[], clipIndex: numbe
 
 export function computeShowcaseStartSec(
   sequence: SequenceItem[],
-  brandMentionTimeSec?: number
+  brandMentionTimeSec?: number,
+  layout?: ReelLayout
 ): number {
-  const total = sequence.reduce((acc, it) => acc + it.trim_duration, 0)
+  // Con voz en off, el corte de vitrina y el total incluyen el bloque de voz.
+  const voLayout = layout?.voiceOver ? layout : null
+  const total = voLayout ? voLayout.totalDurationSec : sequence.reduce((acc, it) => acc + it.trim_duration, 0)
 
   if (sequence.length > SHOWCASE_SEQUENCE_INDEX) {
-    return computeVideoTimelineStartSec(sequence, SHOWCASE_SEQUENCE_INDEX)
+    return voLayout
+      ? (voLayout.cutStartSec[SHOWCASE_SEQUENCE_INDEX] ?? 0)
+      : computeVideoTimelineStartSec(sequence, SHOWCASE_SEQUENCE_INDEX)
   }
 
   if (brandMentionTimeSec != null && brandMentionTimeSec > 0) {
@@ -358,11 +366,11 @@ function assignHighlightEffects(
 export async function applyCaptionHighlights(
   opts: ApplyCaptionHighlightsOpts
 ): Promise<SubtitleBlock[]> {
-  const { jobId, blocks, sequence, brandMentionTimeSec, vehicleContext, aiHighlights = [] } = opts
+  const { jobId, blocks, sequence, brandMentionTimeSec, vehicleContext, aiHighlights = [], layout } = opts
 
   if (blocks.length === 0) return blocks
 
-  const showcaseStart = computeShowcaseStartSec(sequence, brandMentionTimeSec)
+  const showcaseStart = computeShowcaseStartSec(sequence, brandMentionTimeSec, layout)
   const candidates = mergeAiCandidates(buildLocalCandidates(vehicleContext), aiHighlights)
 
   const matches = findBlockMatches(blocks, candidates, showcaseStart)

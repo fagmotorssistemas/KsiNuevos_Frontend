@@ -115,19 +115,26 @@ export interface SequenceTimelineRange {
 /** Rangos [start, end) por ítem de secuencia → clip de origen (archivo subido). */
 export function buildSequenceTimelineRanges(
   sequence: SequenceItem[],
-  opts?: { guionSubtitleTimeline?: boolean }
+  opts?: {
+    guionSubtitleTimeline?: boolean
+    /** Con voz en off, los cortes de después del bloque van corridos (`buildReelLayout`). */
+    layout?: ReelLayout
+  }
 ): SequenceTimelineRange[] {
   const ranges: SequenceTimelineRange[] = []
   let linearMs = 0
+  const voLayout = opts?.layout?.voiceOver ? opts.layout : null
 
   for (let si = 0; si < sequence.length; si++) {
     const item = sequence[si]!
     const durSec = item.trim_duration
-    const startSec = opts?.guionSubtitleTimeline
-      ? si < GUION_SUBTITLE_LINEAR_UNTIL_SEQ_INDEX
-        ? linearMs / 1000
+    const startSec = voLayout
+      ? (voLayout.cutStartSec[si] ?? 0)
+      : opts?.guionSubtitleTimeline
+        ? si < GUION_SUBTITLE_LINEAR_UNTIL_SEQ_INDEX
+          ? linearMs / 1000
+          : computeReelClipStartSec(sequence, si)
         : computeReelClipStartSec(sequence, si)
-      : computeReelClipStartSec(sequence, si)
     const endSec = Number((startSec + durSec).toFixed(3))
 
     ranges.push({
