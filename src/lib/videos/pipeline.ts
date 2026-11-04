@@ -244,6 +244,12 @@ function startMotionRender(jobId: string, input: Omit<MotionRenderInput, 'jobId'
       const file = await renderMotionReel({ jobId, ...input }, (pct, step) =>
         updateJob(jobId, { progress_percentage: pct, current_step: step }).catch(() => {})
       )
+      // El render tarda minutos: si borraron el job mientras tanto, no se sube un reel sin dueño.
+      if ((await getJobStatus(jobId)) === 'deleted') {
+        console.warn(`[VideoV2Pipeline][${jobId}][Motion3D] El job se borró durante el render; no se sube el video.`)
+        fs.rmSync(motionWorkDir(jobId), { recursive: true, force: true })
+        return
+      }
       await updateJob(jobId, { progress_percentage: 98, current_step: 'Motion 3D: subiendo el video…' })
       const url = await uploadFinalReelFile(file, jobId)
       await updateJob(jobId, {

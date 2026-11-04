@@ -205,9 +205,13 @@ export async function storeRemoteVideoInReelsBucket(
   sourceUrl: string,
   storagePath: string
 ): Promise<string> {
-  const supabase = getServiceClient()
   const buffer = await downloadVideoWithRetry(sourceUrl)
+  return uploadReelBufferWithRetry(buffer, storagePath)
+}
 
+/** Sube un MP4 a `reels-v2/{storagePath}` reintentando errores de red; devuelve la URL pública. */
+async function uploadReelBufferWithRetry(buffer: Buffer, storagePath: string): Promise<string> {
+  const supabase = getServiceClient()
   const maxAttempts = 4
   let lastMessage = 'sin respuesta'
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -254,15 +258,7 @@ async function downloadVideoWithRetry(url: string): Promise<Buffer> {
 
 /** Sube un MP4 renderizado en esta máquina (Motion 3D) como reel final y devuelve su URL pública. */
 export async function uploadFinalReelFile(localPath: string, jobId: string): Promise<string> {
-  const supabase = getServiceClient()
-  const buffer = await readFile(localPath)
-  const { error } = await supabase.storage.from(REELS_FINAL_BUCKET).upload(finalReelStoragePath(jobId), buffer, {
-    contentType: 'video/mp4',
-    upsert: true,
-    cacheControl: '31536000',
-  })
-  if (error) throw new Error(`Error subiendo reel a Storage: ${error.message}`)
-  return finalReelPublicUrl(jobId)
+  return uploadReelBufferWithRetry(await readFile(localPath), finalReelStoragePath(jobId))
 }
 
 /** Persiste el reel en Storage; si falla, devuelve la URL temporal de Shotstack. */
