@@ -90,6 +90,7 @@ const VISUAL_PLAN_SCHEMA = {
     'color_filter',
     'spec_cards',
     'card_animation',
+    'flash_segment_id',
   ],
   properties: {
     style_name: { type: 'string' },
@@ -110,7 +111,40 @@ const VISUAL_PLAN_SCHEMA = {
       },
     },
     card_animation: { type: 'string', enum: [...HOOK_ANIMATIONS] },
+    flash_segment_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   },
+}
+
+const SEQUENCE_ITEM_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'segment_id',
+    'clip_index',
+    'trim_start',
+    'trim_end',
+    'trim_duration',
+    'order',
+    'reason',
+    'visual_overlay',
+  ],
+  properties: {
+    segment_id: { type: 'string' },
+    clip_index: { type: 'integer' },
+    trim_start: { type: 'number' },
+    trim_end: { type: 'number' },
+    trim_duration: { type: 'number' },
+    order: { type: 'integer' },
+    reason: { type: 'string' },
+    visual_overlay: { anyOf: [OVERLAY_SCHEMA, { type: 'null' }] },
+  },
+}
+
+/** Shotstack: Claude decide en qué cortes va una transición. Motion 3D anima sus propios cortes. */
+const SEQUENCE_ITEM_WITH_TRANSITION_SCHEMA = {
+  ...SEQUENCE_ITEM_SCHEMA,
+  required: [...SEQUENCE_ITEM_SCHEMA.required, 'transition_after'],
+  properties: { ...SEQUENCE_ITEM_SCHEMA.properties, transition_after: { type: 'boolean' } },
 }
 
 const EDIT_PLAN_SCHEMA = {
@@ -125,33 +159,7 @@ const EDIT_PLAN_SCHEMA = {
     'visual_plan',
   ],
   properties: {
-    sequence: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: [
-          'segment_id',
-          'clip_index',
-          'trim_start',
-          'trim_end',
-          'trim_duration',
-          'order',
-          'reason',
-          'visual_overlay',
-        ],
-        properties: {
-          segment_id: { type: 'string' },
-          clip_index: { type: 'integer' },
-          trim_start: { type: 'number' },
-          trim_end: { type: 'number' },
-          trim_duration: { type: 'number' },
-          order: { type: 'integer' },
-          reason: { type: 'string' },
-          visual_overlay: { anyOf: [OVERLAY_SCHEMA, { type: 'null' }] },
-        },
-      },
-    },
+    sequence: { type: 'array', items: SEQUENCE_ITEM_WITH_TRANSITION_SCHEMA },
     total_duration: { type: 'number' },
     overall_strategy: { type: 'string' },
     voice_over_insert_after_count: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
@@ -180,7 +188,11 @@ function editPlanSchema(motion: MotionFormat | null) {
   return {
     ...EDIT_PLAN_SCHEMA,
     required: [...EDIT_PLAN_SCHEMA.required.filter((k) => k !== 'visual_plan'), 'motion_plan'],
-    properties: { ...properties, motion_plan: motionPlanSchema(motion) },
+    properties: {
+      ...properties,
+      sequence: { type: 'array', items: SEQUENCE_ITEM_SCHEMA },
+      motion_plan: motionPlanSchema(motion),
+    },
   }
 }
 

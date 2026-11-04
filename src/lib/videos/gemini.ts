@@ -11,6 +11,7 @@ import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
 import { defaultClipKinds } from './clip-config'
 import { requestReelEditPlan, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
 import type { SegmentFrame } from './segment-frames'
+import { normalizeTransitionFlags, transitionBoundaries } from './reel-timeline'
 import type { VisualPlan } from './visual-plan'
 import { motionPlanPromptBlock, type MotionFormat, type MotionPlan } from '@/lib/reels-motion/motion-plan'
 
@@ -1025,7 +1026,8 @@ const BROLL_PROMPT_BLOCK = `PLANOS SIN HABLA (visual_overlay):
 const VISUAL_PLAN_BLOCK = `DIRECCIÓN VISUAL ("visual_plan") — tú decides el estilo de este Reel:
 - El segundo 0 tiene que detener el scroll. "hook_text" es un texto grande en pantalla desde el inicio (2 a 6 palabras, máx. 42 caracteres): pregunta, dato fuerte o promesa; no tiene que ser lo que dice el asesor. Elige cómo entra ("hook_animation": impacto = rebote grande, deslizar_izquierda/deslizar_derecha = entra de lado, caer = baja desde arriba, girar = entra girando, revelar = se descubre de izquierda a derecha) y su sonido ("hook_sfx").
 - "spec_cards": hasta 4 datos cortos (1 a 3 palabras, ej. "2.8 DIÉSEL", "7 PASAJEROS") que aparecen al inicio del corte de tu "sequence" (segment_id) donde el asesor lo dice. Solo datos que de verdad se mencionan. "card_animation" usa las mismas entradas que el gancho.
-- "transitions": cómo se pasa de una toma a otra (deslizar, barrido, carrusel = empuja la toma, giro, zoom, fundido, revelar).
+- Transiciones: en cada corte de "sequence", "transition_after" = true si al pasar al siguiente corte va una transición animada, false si es corte seco. Pon entre 2 y 4 en todo el Reel, solo donde cambia la escena o el tema (de la presentación al motor, del exterior al interior, antes del cierre); nunca en medio de una misma idea ni entre cortes de menos de 1,5 s. Los cortes secos dan el ritmo. "transitions" es el estilo de esas transiciones (deslizar, barrido, carrusel = empuja la toma, giro, zoom, fundido, revelar).
+- "flash_segment_id": el corte de "sequence" que entra con un destello de luz, el momento de revelación más fuerte (el motor, el interior, el precio), o null si este Reel no lo necesita. Las transiciones y el destello llevan un whoosh.
 - "camera_motion": movimiento sobre cada toma (acercar, alejar, alternar, paneo = desliza la cámara, quieto).
 - "palette": color de los textos en pantalla. "color_filter": tono de la imagen (ninguno, contraste, intenso = más saturado, suave = menos saturado).
 - "style_name": un nombre corto para este estilo.
@@ -1161,9 +1163,13 @@ ${capped}
 `
 }
 
-function buildOutputBlock(manual: boolean): string {
+function buildOutputBlock(manual: boolean, motion: boolean): string {
+  // Motion 3D anima sus propios cortes: solo Shotstack lleva transition_after.
+  const lastFields = motion
+    ? ' y visual_overlay (objeto o null)'
+    : ', visual_overlay (objeto o null) y transition_after (ver dirección visual)'
   return `FORMATO DE LA RESPUESTA (JSON):
-- "sequence": los cortes en el orden del Reel. En cada uno: segment_id, clip_index, trim_start, trim_end, trim_duration, order, reason (por qué va ese corte; si lleva visual_overlay, qué se ve) y visual_overlay (objeto o null).
+- "sequence": los cortes en el orden del Reel. En cada uno: segment_id, clip_index, trim_start, trim_end, trim_duration, order, reason (por qué va ese corte; si lleva visual_overlay, qué se ve)${lastFields}.
 - "total_duration": suma de trim_duration. "overall_strategy": una frase sobre la estrategia editorial.
 - "voice_over_insert_after_count": ${manual ? 'obligatorio (ver bloque de voz en off)' : 'null (no hay bloque de voz en off)'}.
 - "caption_highlights": entre 3 y 8 frases del DIÁLOGO de los cortes elegidos que merecen destacarse en pantalla; priority 1 = más importante.
@@ -1215,7 +1221,7 @@ REGLAS TÉCNICAS:
 - Usa solo segment_id del mapa, cada uno una vez, con trim_start = start_s y trim_end = end_s (el sistema ajusta los bordes para no cortar palabras).
 ${brollBlock}${voBlock}${buildOrderedBrollTakesBlock(opts.orderedBrollTakes, opts.motion != null)}
 ${opts.motion ? motionPlanPromptBlock(opts.motion) : VISUAL_PLAN_BLOCK}
-${buildOutputBlock(manual)}`
+${buildOutputBlock(manual, opts.motion != null)}`
 }
 
 // ─── Función principal: analyzeSegments ──────────────────────────────────────
@@ -1346,8 +1352,18 @@ export async function analyzeSegments(
     `[VideoV2Pipeline][${jobId}][Claude] Secuencia validada: ${validated.sequence.length} segmentos, ${validated.total_duration.toFixed(1)}s total${voInsNote}`
   )
 
+  // Transiciones que eligió Claude: solo entre cortes que las aguanten y como mucho 4.
+  const sequence = normalizeTransitionFlags(validated.sequence, {
+    ...(typeof voIns === 'number' ? { hardCutAfterIndex: voIns - 1 } : {}),
+  })
+  if (sequence !== validated.sequence) {
+    const cuts = transitionBoundaries(sequence).map((b) => `${b + 1}→${b + 2}`)
+    console.log(`[VideoV2Pipeline][${jobId}][Claude] Transiciones: ${cuts.length > 0 ? cuts.join(', ') : 'ninguna (solo cortes secos)'}`)
+  }
+
   return {
     ...validated,
+    sequence,
     caption_highlights: plan.caption_highlights,
     ...(plan.visual_plan ? { visual_plan: plan.visual_plan } : {}),
     ...(plan.motion_plan ? { motion_plan: plan.motion_plan } : {}),
