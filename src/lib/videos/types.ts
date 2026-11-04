@@ -2,6 +2,7 @@ import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
 import type { VisualPlan } from './visual-plan'
 import type { MotionPlan } from '@/lib/reels-motion/motion-plan'
 import type { SequenceItem } from './segmenter'
+import type { TranscriptFix } from './transcript-fixes'
 
 export type { VideoClipKind, VideoJobPipelineInputMeta } from './clip-config'
 export { isPipelineInputMeta, normalizeClipDurationsInput, VIDEO_MAX_CLIPS } from './clip-config'
@@ -61,6 +62,8 @@ export interface GeminiSegmentAnalysisResult {
   voice_over_insert_after_count?: number
   /** Frases a destacar en subtítulos elegidas por Claude (el re-render las reutiliza sin otra llamada). */
   caption_highlights?: AiHighlightPhrase[]
+  /** Palabras mal transcritas que corrigió Claude; el re-render y el editor las vuelven a aplicar. */
+  transcript_fixes?: TranscriptFix[]
   /** Estilo visual elegido por Claude; el re-render lo reutiliza. */
   visual_plan?: VisualPlan
   /** Plan de gráficos de un Reel Motion 3D; el re-render lo reutiliza. */

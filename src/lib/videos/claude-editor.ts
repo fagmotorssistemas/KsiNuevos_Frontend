@@ -10,6 +10,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { SequenceItem } from './segmenter'
 import type { SegmentFrame } from './segment-frames'
+import type { TranscriptFix } from './transcript-fixes'
 import {
   CAMERA_MOTIONS,
   COLOR_FILTERS,
@@ -59,6 +60,8 @@ export interface ReelEditorResult {
   overall_strategy: string
   voice_over_insert_after_count?: number
   caption_highlights: AiHighlightPhrase[]
+  /** Errores de la transcripción en los cortes elegidos (se validan contra el mapa en gemini.ts). */
+  transcript_fixes: TranscriptFix[]
   visual_plan: VisualPlan | null
   /** Solo en Reels Motion 3D (en lugar de visual_plan). */
   motion_plan: MotionPlan | null
@@ -156,6 +159,7 @@ const EDIT_PLAN_SCHEMA = {
     'overall_strategy',
     'voice_over_insert_after_count',
     'caption_highlights',
+    'transcript_fixes',
     'visual_plan',
   ],
   properties: {
@@ -174,6 +178,15 @@ const EDIT_PLAN_SCHEMA = {
           kind: { type: 'string', enum: ['spec', 'feature', 'emotional'] },
           priority: { type: 'integer' },
         },
+      },
+    },
+    transcript_fixes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['segment_id', 'wrong', 'right'],
+        properties: { segment_id: { type: 'string' }, wrong: { type: 'string' }, right: { type: 'string' } },
       },
     },
     visual_plan: VISUAL_PLAN_SCHEMA,
@@ -204,6 +217,7 @@ interface RawEditPlan {
   overall_strategy: string
   voice_over_insert_after_count: number | null
   caption_highlights: AiHighlightPhrase[]
+  transcript_fixes?: TranscriptFix[]
   visual_plan?: unknown
   motion_plan?: unknown
 }
@@ -299,6 +313,7 @@ export async function requestReelEditPlan(
       ? { voice_over_insert_after_count: raw.voice_over_insert_after_count }
       : {}),
     caption_highlights: raw.caption_highlights.slice(0, 8),
+    transcript_fixes: raw.transcript_fixes ?? [],
     visual_plan: normalizeVisualPlan(raw.visual_plan),
     motion_plan: opts.motion ? normalizeMotionPlan(raw.motion_plan, opts.motion) : null,
     usage,

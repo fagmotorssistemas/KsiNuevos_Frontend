@@ -12,6 +12,7 @@ import { defaultClipKinds } from './clip-config'
 import { requestReelEditPlan, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
 import type { SegmentFrame } from './segment-frames'
 import { normalizeTransitionFlags, transitionBoundaries } from './reel-timeline'
+import { normalizeTranscriptFixes, type TranscriptFix } from './transcript-fixes'
 import type { VisualPlan } from './visual-plan'
 import { motionPlanPromptBlock, type MotionFormat, type MotionPlan } from '@/lib/reels-motion/motion-plan'
 
@@ -28,6 +29,8 @@ export interface GeminiSegmentAnalysis {
   voice_over_insert_after_count?: number
   /** Frases del diálogo a destacar en subtítulos (misma llamada a Claude; el re-render las reutiliza). */
   caption_highlights?: AiHighlightPhrase[]
+  /** Palabras mal transcritas en los cortes elegidos; se corrigen antes de armar los subtítulos. */
+  transcript_fixes?: TranscriptFix[]
   /** Estilo visual del Reel (gancho, tarjetas, transiciones…) que dibuja shotstack.ts. */
   visual_plan?: VisualPlan
   /** Plan de gráficos de un Reel Motion 3D (lo dibuja reels-motion/composer.ts). */
@@ -1175,7 +1178,10 @@ function buildOutputBlock(manual: boolean, motion: boolean): string {
 - "caption_highlights": entre 3 y 8 frases del DIÁLOGO de los cortes elegidos que merecen destacarse en pantalla; priority 1 = más importante.
   · "phrase" debe aparecer (o casi) en la transcripción: ej. "amplia cabina", "pantalla multimedia", "resistencia".
   · kind "spec": motor, cilindrada, 4x4, diésel, turbo. "feature": cabina, pantalla, equipamiento, diseño. "emotional": confianza, resistencia, durabilidad, desempeño.
-  · Sin "comenta", sin marca del concesionario ni CTAs, sin repetir la misma idea.`
+  · Sin "comenta", sin marca del concesionario ni CTAs, sin repetir la misma idea.
+- "transcript_fixes": palabras que la transcripción automática oyó mal en los cortes que elegiste, sobre todo versión, cifras y siglas, porque salen escritas en los subtítulos. Ej.: "cuadragésimo" cuando dijo XL, "2010" cuando dijo 2.0, "más" cuando en el "comenta" va "+". Usa el vehículo del inventario y lo que ves en los cuadros.
+  · En cada una: segment_id, "wrong" (las palabras exactas como están en el mapa, máx. 4) y "right" (cómo se dijeron o se escriben, máx. 4 palabras).
+  · Solo palabras mal oídas: no reescribas frases ni cambies lo que dijo el asesor. Sin errores: [].`
 }
 
 function buildEditorPrompt(opts: {
@@ -1361,10 +1367,20 @@ export async function analyzeSegments(
     console.log(`[VideoV2Pipeline][${jobId}][Claude] Transiciones: ${cuts.length > 0 ? cuts.join(', ') : 'ninguna (solo cortes secos)'}`)
   }
 
+  // Correcciones de la transcripción: solo las que existen tal cual en el corte que nombran.
+  const transcriptFixes = normalizeTranscriptFixes(plan.transcript_fixes, allSegments)
+  if (transcriptFixes.length > 0 || plan.transcript_fixes.length > 0) {
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Claude] Correcciones de transcripción (${transcriptFixes.length}/${plan.transcript_fixes.length} válidas): ` +
+        transcriptFixes.map((f) => `${f.segment_id} "${f.wrong}" → "${f.right}"`).join(', ')
+    )
+  }
+
   return {
     ...validated,
     sequence,
     caption_highlights: plan.caption_highlights,
+    ...(transcriptFixes.length > 0 ? { transcript_fixes: transcriptFixes } : {}),
     ...(plan.visual_plan ? { visual_plan: plan.visual_plan } : {}),
     ...(plan.motion_plan ? { motion_plan: plan.motion_plan } : {}),
     editor_usage: plan.usage,

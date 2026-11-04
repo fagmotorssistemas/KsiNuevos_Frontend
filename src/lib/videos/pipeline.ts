@@ -29,6 +29,7 @@ import {
 } from './segmenter'
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
 import { buildReelLayout, type ReelLayout } from './reel-timeline'
+import { applyTranscriptFixes, normalizeTranscriptFixes } from './transcript-fixes'
 import type { VideoClipKind, CanonicalVehicleMeta, ReelRenderEngine } from './clip-config'
 import {
   defaultClipKinds,
@@ -784,7 +785,7 @@ export async function runSingleVideoPipelineFromStorage(
 
     const capMs =
       rawWords.length > 0 ? rawWords[rawWords.length - 1]!.end + 3000 : null
-    const segments = refineSpokenSegmentsForOneClip(0, rawWords, capMs)
+    let segments = refineSpokenSegmentsForOneClip(0, rawWords, capMs)
     await updateJob(jobId, { segment_map: segments })
     console.log(`[VideoV2Pipeline][${jobId}][A2] ${segments.length} segmentos detectados`)
 
@@ -866,6 +867,8 @@ export async function runSingleVideoPipelineFromStorage(
       console.log(`[VideoV2Pipeline][${jobId}][A3] Secuencia por guión (sin llamada a Claude para orden)`)
     }
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
+    // Palabras mal transcritas que corrigió Claude (el segment_map guardado queda tal cual).
+    segments = applyTranscriptFixes(segments, analysis.transcript_fixes)
 
     // A4 — Construir subtítulos
     console.log(`[VideoV2Pipeline][${jobId}][A4] Construyendo subtítulos`)
@@ -1318,7 +1321,7 @@ export async function runMultipleClipsPipelineFromStorage(
       progress_percentage: 50,
     })
 
-    const allSegments: Segment[] = []
+    let allSegments: Segment[] = []
     for (let i = 0; i < transcriptions.length; i++) {
       if (kinds[i] === 'visual_only') {
         const dur = transcriptions[i].visualFileDurationSec
@@ -1605,6 +1608,8 @@ export async function runMultipleClipsPipelineFromStorage(
     }
 
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
+    // Palabras mal transcritas que corrigió Claude (el segment_map guardado queda tal cual).
+    allSegments = applyTranscriptFixes(allSegments, analysis.transcript_fixes)
 
     if ((voiceOverBaseClipIndex != null || voiceOverAudioPath != null) && analysis.sequence.length === 0) {
       await updateJob(jobId, {
@@ -1895,6 +1900,9 @@ function coerceGeminiAnalysisFromUnknown(raw: unknown, jobId: string): GeminiSeg
       : {}),
     ...(o.editor_usage && typeof o.editor_usage === 'object'
       ? { editor_usage: o.editor_usage as ReelEditorUsage }
+      : {}),
+    ...(normalizeTranscriptFixes(o.transcript_fixes).length > 0
+      ? { transcript_fixes: normalizeTranscriptFixes(o.transcript_fixes) }
       : {}),
     ...(normalizeVisualPlan(o.visual_plan) ? { visual_plan: normalizeVisualPlan(o.visual_plan)! } : {}),
     ...(normalizeMotionPlan(o.motion_plan) ? { motion_plan: normalizeMotionPlan(o.motion_plan)! } : {}),
@@ -2258,9 +2266,11 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
   const paths = job.raw_video_paths ?? []
   if (paths.length === 0) throw new Error('Job sin raw_video_paths')
 
-  const allSegments = parseSegmentMapJson(job.segment_map)
+  const storedSegments = parseSegmentMapJson(job.segment_map)
   const analysis = coerceGeminiAnalysisFromUnknown(job.gemini_analysis, jobId)
-  assertSequenceMatchesStoredSegments(analysis, allSegments, jobId)
+  assertSequenceMatchesStoredSegments(analysis, storedSegments, jobId)
+  // La transcripción guardada queda tal cual; los subtítulos salen con las correcciones de Claude.
+  const allSegments = applyTranscriptFixes(storedSegments, analysis.transcript_fixes)
 
   let kinds = defaultClipKinds(paths.length)
   let clipDurationsSecInput: (number | null)[] | undefined
@@ -2397,10 +2407,11 @@ export async function rerunRenderForJob(
     ? normalizeMusicTrimStartSec(opts?.musicTrimStartSecOverride ?? undefined)
     : undefined
 
-  const allSegments = parseSegmentMapJson(job.segment_map)
+  const storedSegments = parseSegmentMapJson(job.segment_map)
   const rawAnalysis = geminiAnalysisOverride ?? job.gemini_analysis
   const analysis = coerceGeminiAnalysisFromUnknown(rawAnalysis, jobId)
-  assertSequenceMatchesStoredSegments(analysis, allSegments, jobId)
+  assertSequenceMatchesStoredSegments(analysis, storedSegments, jobId)
+  const allSegments = applyTranscriptFixes(storedSegments, analysis.transcript_fixes)
 
   let kinds = defaultClipKinds(paths.length)
   let clipDurationsSecInput: (number | null)[] | undefined
